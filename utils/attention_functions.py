@@ -1,40 +1,6 @@
 from comfy.ldm.modules.attention import default, optimized_attention, optimized_attention_masked, attention_basic
 from .style_functions import adain, concat_first, swapping_attention
 
-ATTENTION_LAYER_CANDIDATES = [
-"input_blocks.1.1.transformer_blocks.0.attn1",
-"input_blocks.1.1.transformer_blocks.0.attn2",
-"input_blocks.2.1.transformer_blocks.0.attn1",
-"input_blocks.2.1.transformer_blocks.0.attn2",
-"input_blocks.4.1.transformer_blocks.0.attn1",
-"input_blocks.4.1.transformer_blocks.0.attn2",
-"input_blocks.5.1.transformer_blocks.0.attn1",
-"input_blocks.5.1.transformer_blocks.0.attn2",
-"input_blocks.7.1.transformer_blocks.0.attn1",
-"input_blocks.7.1.transformer_blocks.0.attn2",
-"input_blocks.8.1.transformer_blocks.0.attn1",
-"input_blocks.8.1.transformer_blocks.0.attn2",
-"middle_block.1.transformer_blocks.0.attn1",
-"middle_block.1.transformer_blocks.0.attn2",
-"output_blocks.3.1.transformer_blocks.0.attn1",
-"output_blocks.3.1.transformer_blocks.0.attn2",
-"output_blocks.4.1.transformer_blocks.0.attn1",
-"output_blocks.4.1.transformer_blocks.0.attn2",
-"output_blocks.5.1.transformer_blocks.0.attn1",
-"output_blocks.5.1.transformer_blocks.0.attn2",
-"output_blocks.6.1.transformer_blocks.0.attn1",
-"output_blocks.6.1.transformer_blocks.0.attn2",
-"output_blocks.7.1.transformer_blocks.0.attn1",
-"output_blocks.7.1.transformer_blocks.0.attn2",
-"output_blocks.8.1.transformer_blocks.0.attn1",
-"output_blocks.8.1.transformer_blocks.0.attn2",
-"output_blocks.9.1.transformer_blocks.0.attn1",
-"output_blocks.9.1.transformer_blocks.0.attn2",
-"output_blocks.10.1.transformer_blocks.0.attn1",
-"output_blocks.10.1.transformer_blocks.0.attn2",
-"output_blocks.11.1.transformer_blocks.0.attn1",
-"output_blocks.11.1.transformer_blocks.0.attn2"
-]
 
 class VisualStyleProcessor(object):
     def __init__(self, 
@@ -61,6 +27,7 @@ class VisualStyleProcessor(object):
         q = self.module_self.to_q(x)
         context = default(context, x)
         k = self.module_self.to_k(context)
+        print(context)
         if value is not None:
             v = self.module_self.to_v(value)
             del value
