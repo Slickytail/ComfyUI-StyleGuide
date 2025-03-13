@@ -35,6 +35,14 @@ def adain(feat: T) -> T:
     feat = feat * feat_style_std + feat_style_mean
     return feat
 
+def q_content(query,chunk_size=2):
+    chunk_length = query.size()[0] // chunk_size  # [text-condition, null-condition]
+    original_image_index = [1] * chunk_length  # [0 0 0 0 0]
+    query = rearrange(query, "(b f) d c -> b f d c", f=chunk_length)
+    query = query[:, original_image_index]  # ref to all
+    query = rearrange(query, "b f d c -> (b f) d c")
+    return query
+
 def swapping_attention(key, value, chunk_size=2):
     chunk_length = key.size()[0] // chunk_size  # [text-condition, null-condition]
     reference_image_index = [0] * chunk_length  # [0 0 0 0 0]

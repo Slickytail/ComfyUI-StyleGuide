@@ -1,5 +1,5 @@
 from comfy.ldm.modules.attention import default, optimized_attention, optimized_attention_masked, attention_basic
-from .style_functions import adain, concat_first, swapping_attention
+from .style_functions import adain, concat_first, swapping_attention, q_content
 
 
 class VisualStyleProcessor(object):
@@ -7,15 +7,13 @@ class VisualStyleProcessor(object):
         module_self, 
         keys_scale: float = 1.0,
         enabled: bool = True, 
-        enabled_animatediff: bool = False,
-        adain_queries: bool = False,
-        adain_keys: bool = False,
+        adain_queries: bool = True,
+        adain_keys: bool = True,
         adain_values: bool = False 
     ):
         self.module_self = module_self
         self.keys_scale = keys_scale
         self.enabled = enabled
-        self.enabled_animatediff = enabled
         self.adain_queries = adain_queries
         self.adain_keys = adain_keys
         self.adain_values = adain_values
@@ -27,12 +25,8 @@ class VisualStyleProcessor(object):
         q = self.module_self.to_q(x)
         context = default(context, x)
         k = self.module_self.to_k(context)
-        print(context)
-        if value is not None:
-            v = self.module_self.to_v(value)
-            del value
-        else:
-            v = self.module_self.to_v(context)
+
+        v = self.module_self.to_v(context)
 
         if self.enabled:
             if self.adain_queries:
@@ -41,11 +35,10 @@ class VisualStyleProcessor(object):
                 k = adain(k)
             if self.adain_values:
                 v = adain(v)
-            
-            k, v = swapping_attention(k, v)
 
-            #k = concat_first(k, -2, self.keys_scale)
-            #v = concat_first(v, -2)
+            k, v = swapping_attention(k, v)
+        
+        # q = q_content(q)
 
         if mask is None:
             out = optimized_attention(q, k, v, self.module_self.heads)

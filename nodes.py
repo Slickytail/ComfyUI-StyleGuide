@@ -18,13 +18,10 @@ class ApplyVisualStyle:
                 "negative": ("CONDITIONING",),
                 "enabled": ("BOOLEAN", {"default": True}),
                 "denoise": ("FLOAT", {"default": 1., "min": 0., "max": 1., "step": 1e-2}),
-                "input_blocks": ("BOOLEAN", {"default": False}),
-                "skip_input_layers": ("INT", {"default": 24, "min": 0, "max": 48, "step": 1}),
-                "middle_block": ("BOOLEAN", {"default": False}),
-                "skip_middle_layers": ("INT", {"default": 1, "min": 0, "max": 2, "step": 1}),
-                "output_blocks": ("BOOLEAN", {"default": True}),
+                "adain_q": ("BOOLEAN", {"default": True}),
+                "adain_k": ("BOOLEAN", {"default": True}),
+                "adain_v": ("BOOLEAN", {"default": False}),
                 "skip_output_layers": ("INT", {"default": 24, "min": 0, "max": 72, "step": 1}),
-                "active_blocks": ("STRING", {"default": "0,1,2,3,4,5"})
             },
             "optional": {
                 "init_image": ("IMAGE",),
@@ -37,24 +34,6 @@ class ApplyVisualStyle:
 
     FUNCTION = "apply_visual_style_prompt"
 
-    def get_block_choices(self, input_blocks, middle_block, output_blocks):
-        block_choices_map = (
-            [input_blocks, "input"],
-            [middle_block, "middle"],
-            [output_blocks, "output"]
-        )
-
-        block_choices = []
-
-        for block_choice in block_choices_map:
-            if block_choice[0]:
-                block_choices.append(block_choice[1])
-
-        return block_choices
-
-    def activate_block_choice(self, key, block_choices):
-        return any([block in key for block in block_choices])
-
     def apply_visual_style_prompt(
         self,
         model: comfy.model_patcher.ModelPatcher,
@@ -65,39 +44,15 @@ class ApplyVisualStyle:
         negative,
         enabled,
         denoise,
-        input_blocks,
-        middle_block,
-        output_blocks,
-        active_blocks,
-        init_image = None,
-        skip_input_layers=0,
-        skip_middle_layers=0,
+        adain_q,
+        adain_k,
+        adain_v,
         skip_output_layers=0
 
     ):
 
     
         reference_samples = reference_latent["samples"]
-        block_choices = self.get_block_choices(input_blocks, middle_block, output_blocks)
-
-
-        layer_indexes = {
-            "input": 0,
-            "middle": 0,
-            "output": 0
-        }
-
-        n_skip_per_block = {
-            "input": skip_input_layers,
-            "middle": skip_middle_layers,
-            "output": skip_output_layers
-        }
-
-        block_name_map = {
-            "input": "IN",
-            "middle": "MID",
-            "output": "OUT"
-        }
 
         block_num = 0
         for n, m in model.model.diffusion_model.named_modules():
@@ -109,10 +64,10 @@ class ApplyVisualStyle:
                 is_enabled = is_self_attn and is_output_block and (block_num >= skip_output_layers)
                 if is_output_block: 
                     block_num += 1
-                    
+
                 if is_enabled:
                     print(n)
-                    processor = VisualStyleProcessor(m, enabled=True)
+                    processor = VisualStyleProcessor(m, enabled=True, adain_queries=adain_q, adain_keys=adain_k, adain_values=adain_v)
                     m.forward = processor
 
 
