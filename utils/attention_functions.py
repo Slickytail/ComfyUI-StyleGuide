@@ -53,27 +53,3 @@ class VisualStyleProcessor(object):
             out = optimized_attention_masked(q, k, v, self.module_self.heads, mask)
         return self.module_self.to_out(out)
 
-    # TODO
-    def visual_style_forward_ad(self, x, context=None, value=None, mask=None):
-        q = module_self.to_q(x)
-        context = default(context, x)
-        k = module_self.to_k(context)
-        if value is not None:
-            v = module_self.to_v(value)
-            del value
-        else:
-            v = module_self.to_v(context)
-        
-        # apply custom scale by multiplying k by scale factor
-        if module_self.scale is not None:
-            k *= module_self.scale
-        
-        # apply scale mask, if present
-        if scale_mask is not None:
-            k *= scale_mask
-        
-        if self.enable_animatediff:
-            k, v = swapping_attention(key, value)
-            
-        out = attention_basic(q, k, v, module_self.heads, mask)
-        return self.to_out(out)

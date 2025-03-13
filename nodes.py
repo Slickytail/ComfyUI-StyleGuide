@@ -99,55 +99,22 @@ class ApplyVisualStyle:
             "output": "OUT"
         }
 
-        class_names = set()
+        block_num = 0
         for n, m in model.model.diffusion_model.named_modules():
             if m.__class__.__name__ == "CrossAttention":
-                is_enabled = self.activate_block_choice(n, block_choices)
-                if is_enabled:
-                    block_name = n.split("_")[0]
+                is_self_attn = "attn1" in n  # Only swap self-attention layers
+                is_output_block = "output_blocks" in n
 
-                    #here we want to enable and disable blocks accordingly 
-                    parts = n.split('.')
-                    block_index = int(parts[1])  # Second element (index 1) is the block index
-                    attn_type = parts[-1]  # Last element is the attention type (attn1 or attn2)
-                    # active_blocks = active_blocks.split(",")
-
-                    # block_name = block_name_map[block_name]
-
+                # explicitly only activate clearly output_blocks from skip_output_layers onwards
+                is_enabled = is_self_attn and is_output_block and (block_num >= skip_output_layers)
+                if is_output_block: 
+                    block_num += 1
                     
-                    transformer_split = n.split('transformer_blocks.')[1].split('.')
-
-                    # Extract the number after "transformer_blocks." and convert to integer
-                    transformer_block = int(transformer_split[0])
-
-                    block = block_name + str(block_index)
-
-                    # if (block not in active_blocks): 
-                    #     is_enabled = False
-
-                    if layer_indexes[block_name] < n_skip_per_block[block_name]:
-                        is_enabled = False
-                    else: 
-                        print(n)
-                    layer_indexes[block_name] += 1
-
-                    if (attn_type == "attn2"):
-                        is_enabled = False
-
-                # if is_enabled:
-                #     print(m)
-                #     processor = VisualStyleProcessor(m, enabled=is_enabled)
-                #     setattr(m, 'forward', processor)
-                # if hasattr(m.forward, 'module_self'):
-                #     print(n)
-                #     m.forward.enabled = is_enabled and enabled
-                # # else:
-                #     print(n)
                 if is_enabled:
-                    processor = VisualStyleProcessor(m, enabled=is_enabled)
-                    setattr(m, 'forward', processor)
                     print(n)
-                    print(m)
+                    processor = VisualStyleProcessor(m, enabled=True)
+                    m.forward = processor
+
 
         positive_cat = cat_cond(clip, reference_cond, positive)
         negative_cat = cat_cond(clip, negative, negative)
