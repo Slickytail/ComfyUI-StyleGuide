@@ -3,7 +3,32 @@ import torch
 
 from .utils.attention_functions import VisualStyleProcessor
 from .utils.cond_functions import cat_cond
+from .utils.style_functions import color_calibrate
 
+
+class ColorCalibration:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "final_latent": ("LATENT",),
+                "reference_latent": ("LATENT",),
+                "enabled": ("BOOLEAN", {"default": True}),
+            }
+        }
+    
+    CATEGORY = "VisualStylePrompting/color"
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("calibrated_latent",)
+    FUNCTION = "apply_color_calibration"
+    
+    def apply_color_calibration(self, final_latent, reference_latent, enabled):
+        if not enabled:
+            return final_latent
+        samples = final_latent["samples"]
+        ref_samples = reference_latent["samples"]
+        calibrated = color_calibrate(samples, ref_samples)
+        return ({"samples": calibrated},)
 
 class ApplyVisualStyle:
     @classmethod
@@ -85,9 +110,11 @@ class ApplyVisualStyle:
         return (model, positive_cat, negative_cat, {"samples": latents, "noise_mask": denoise_mask})
 
 NODE_CLASS_MAPPINGS = {
+    "ColorCalibration": ColorCalibration,
     "ApplyVisualStyle": ApplyVisualStyle,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "ColorCalibration": "Color Calibration",
     "ApplyVisualStyle": "Apply Visual Style Prompting",
 }

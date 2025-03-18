@@ -5,6 +5,21 @@ from dataclasses import dataclass
 
 T = torch.Tensor
 
+
+def color_calibrate(pred: T, ref: T, eps: float = 1e-5) -> T:
+    """
+    Calibrate the colors of 'pred' to match the channel-wise mean and std of 'ref'.
+    Both pred and ref should be tensors of shape (batch, channels, height, width).
+    """
+    pred_mean = pred.mean(dim=[2, 3], keepdim=True)
+    pred_std = pred.std(dim=[2, 3], keepdim=True)
+    ref_mean = ref.mean(dim=[2, 3], keepdim=True)
+    ref_std = ref.std(dim=[2, 3], keepdim=True)
+    
+    calibrated = (pred - pred_mean) / (pred_std + eps) * ref_std + ref_mean
+    return calibrated
+
+
 def expand_first(feat: T, scale=1., ) -> T:
     b = feat.shape[0]
     feat_style = torch.stack((feat[0], feat[b // 2])).unsqueeze(1)
