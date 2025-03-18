@@ -5,7 +5,7 @@ from .style_functions import adain, swapping_attention
 class VisualStyleProcessor(object):
     def __init__(self, 
         module_self, 
-        keys_scale: float = 1.0,
+        style_intensity: float = 1.0,
         enabled: bool = True, 
         adain_queries: bool = True,
         adain_keys: bool = True,
@@ -14,7 +14,7 @@ class VisualStyleProcessor(object):
         nvqg_weight: float = 0.5         # new: strength of negative guidance
     ):
         self.module_self = module_self
-        self.keys_scale = keys_scale
+        self.style_intensity = style_intensity
         self.enabled = enabled
         self.adain_queries = adain_queries
         self.adain_keys = adain_keys
@@ -41,7 +41,7 @@ class VisualStyleProcessor(object):
                 v = adain(v)
 
             # Perform swapping on k,v using reference style
-            k, v = swapping_attention(k, v)
+            k, v = swapping_attention(k, v, style_intensity=self.style_intensity)
         
         # Compute positive attention using the modified q,k,v
         if mask is None:

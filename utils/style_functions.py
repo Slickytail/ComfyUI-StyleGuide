@@ -6,7 +6,7 @@ from dataclasses import dataclass
 T = torch.Tensor
 
 
-def color_calibrate(pred: T, ref: T, eps: float = 1e-5) -> T:
+def color_calibrate(pred: T, ref: T, intensity: float = 1.0, eps: float = 1e-5) -> T:
     """
     Calibrate the colors of 'pred' to match the channel-wise mean and std of 'ref'.
     Both pred and ref should be tensors of shape (batch, channels, height, width).
@@ -17,7 +17,8 @@ def color_calibrate(pred: T, ref: T, eps: float = 1e-5) -> T:
     ref_std = ref.std(dim=[2, 3], keepdim=True)
     
     calibrated = (pred - pred_mean) / (pred_std + eps) * ref_std + ref_mean
-    return calibrated
+    out = (1.0 - intensity) * pred + intensity * calibrated
+    return out
 
 
 def expand_first(feat: T, scale=1., ) -> T:
@@ -58,14 +59,27 @@ def q_content(query,chunk_size=2):
     query = rearrange(query, "b f d c -> (b f) d c")
     return query
 
-def swapping_attention(key, value, chunk_size=2):
-    chunk_length = key.size()[0] // chunk_size  # [text-condition, null-condition]
-    reference_image_index = [0] * chunk_length  # [0 0 0 0 0]
-    key = rearrange(key, "(b f) d c -> b f d c", f=chunk_length)
-    key = key[:, reference_image_index]  # ref to all
-    key = rearrange(key, "b f d c -> (b f) d c")
-    value = rearrange(value, "(b f) d c -> b f d c", f=chunk_length)
-    value = value[:, reference_image_index]  # ref to all
-    value = rearrange(value, "b f d c -> (b f) d c")
-
-    return key, value
+def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
+    """
+    Interpolate between the original key/value and the swapped key/value.
+    When style_intensity is 0, the original key/value are preserved.
+    When style_intensity is 1, the swapped key/value are fully used.
+    """
+    # Compute the swapped keys and values as before.
+    chunk_length = key.size()[0] // chunk_size
+    reference_image_index = [0] * chunk_length  # select the reference style from each chunk
+    
+    # Rearrange and extract swapped key.
+    key_reshaped = rearrange(key, "(b f) d c -> b f d c", f=chunk_length)
+    key_swapped = key_reshaped[:, reference_image_index]  # select reference style
+    key_swapped = rearrange(key_swapped, "b f d c -> (b f) d c")
+    
+    # Rearrange and extract swapped value.
+    value_reshaped = rearrange(value, "(b f) d c -> b f d c", f=chunk_length)
+    value_swapped = value_reshaped[:, reference_image_index]
+    value_swapped = rearrange(value_swapped, "b f d c -> (b f) d c")
+    
+    # Perform linear interpolation between the original and swapped features.
+    new_key = (1.0 - style_intensity) * key + style_intensity * key_swapped
+    new_value = (1.0 - style_intensity) * value + style_intensity * value_swapped
+    return new_key, new_value

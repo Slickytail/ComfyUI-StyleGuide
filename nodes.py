@@ -14,6 +14,7 @@ class ColorCalibration:
                 "final_latent": ("LATENT",),
                 "reference_latent": ("LATENT",),
                 "enabled": ("BOOLEAN", {"default": True}),
+                "intensity": ("FLOAT", {"default": 1., "min": 0., "max": 1.0, "step": 0.01}),
             }
         }
     
@@ -22,12 +23,12 @@ class ColorCalibration:
     RETURN_NAMES = ("calibrated_latent",)
     FUNCTION = "apply_color_calibration"
     
-    def apply_color_calibration(self, final_latent, reference_latent, enabled):
+    def apply_color_calibration(self, final_latent, reference_latent, enabled, intensity):
         if not enabled:
             return final_latent
         samples = final_latent["samples"]
         ref_samples = reference_latent["samples"]
-        calibrated = color_calibrate(samples, ref_samples)
+        calibrated = color_calibrate(samples, ref_samples, intensity=intensity)
         return ({"samples": calibrated},)
 
 class ApplyVisualStyle:
@@ -47,6 +48,7 @@ class ApplyVisualStyle:
                 "adain_k": ("BOOLEAN", {"default": True}),
                 "adain_v": ("BOOLEAN", {"default": False}),
                 "skip_output_layers": ("INT", {"default": 24, "min": 0, "max": 72, "step": 1}),
+                "style_intensity": ("FLOAT", {"default": 1., "min": 0., "max": 1.5, "step": 0.01}),
             },
             "optional": {
                 "init_image": ("IMAGE",),
@@ -72,8 +74,8 @@ class ApplyVisualStyle:
         adain_q,
         adain_k,
         adain_v,
-        skip_output_layers=0
-
+        skip_output_layers=0,
+        style_intensity=1.0
     ):
 
     
@@ -92,7 +94,7 @@ class ApplyVisualStyle:
 
                 if is_enabled:
                     print(n)
-                    processor = VisualStyleProcessor(m, enabled=True, adain_queries=adain_q, adain_keys=adain_k, adain_values=adain_v)
+                    processor = VisualStyleProcessor(m, enabled=True, adain_queries=adain_q, adain_keys=adain_k, adain_values=adain_v, style_intensity=style_intensity)
                     m.forward = processor
 
 
