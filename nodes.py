@@ -47,6 +47,7 @@ class ApplyVisualStyle:
                 "adain_q": ("BOOLEAN", {"default": True}),
                 "adain_k": ("BOOLEAN", {"default": True}),
                 "adain_v": ("BOOLEAN", {"default": False}),
+                "nvqg_enabled": ("BOOLEAN", {"default": True}),
                 "skip_output_layers": ("INT", {"default": 24, "min": 0, "max": 72, "step": 1}),
                 "style_intensity": ("FLOAT", {"default": 1., "min": 0., "max": 1.5, "step": 0.01}),
             },
@@ -74,6 +75,7 @@ class ApplyVisualStyle:
         adain_q,
         adain_k,
         adain_v,
+        nvqg_enabled,
         skip_output_layers=0,
         style_intensity=1.0
     ):
@@ -94,7 +96,7 @@ class ApplyVisualStyle:
 
                 if is_enabled:
                     print(n)
-                    processor = VisualStyleProcessor(m, enabled=True, adain_queries=adain_q, adain_keys=adain_k, adain_values=adain_v, style_intensity=style_intensity)
+                    processor = VisualStyleProcessor(m, enabled=True, adain_queries=adain_q, adain_keys=adain_k, adain_values=adain_v, nvqg_enabled=nvqg_enabled, style_intensity=style_intensity)
                     m.forward = processor
 
 

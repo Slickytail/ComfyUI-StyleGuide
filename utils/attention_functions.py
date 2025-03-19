@@ -11,7 +11,7 @@ class VisualStyleProcessor(object):
         adain_keys: bool = True,
         adain_values: bool = False,
         nvqg_enabled: bool = True,      # new: enable NVQG
-        nvqg_weight: float = 0.5         # new: strength of negative guidance
+        nvqg_weight: float = 1.0         # new: strength of negative guidance
     ):
         self.module_self = module_self
         self.style_intensity = style_intensity
@@ -51,6 +51,7 @@ class VisualStyleProcessor(object):
 
         # If NVQG is enabled, compute a negative branch and combine.
         if self.nvqg_enabled:
+            print("enabled")
             # Compute a "negative" query.
             # Here we simply recompute the raw query without applying adain (or with a different transformation).
             q_negative = self.module_self.to_q(x)
