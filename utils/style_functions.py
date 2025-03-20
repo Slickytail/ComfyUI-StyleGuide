@@ -68,7 +68,7 @@ def get_attention(attn, index, chunk_size=2):
     attn_swapped = rearrange(attn_swapped, "b f d c -> (b f) d c")
     return attn_swapped
 
-def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
+def swapping_attention(query, key, value, style_intensity=1.0, chunk_size=2):
     """
     Interpolate between the original key/value and the swapped key/value.
     When style_intensity is 0, the original key/value are preserved.
@@ -77,6 +77,10 @@ def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
     # Compute the swapped keys and values as before.
     chunk_length = key.size()[0] // chunk_size #should be 2 
     reference_image_index = [0] * chunk_length  # this then becomes [0,0]
+    
+    query_reshaped = rearrange(query, "(b f) d c -> b f d c", f=chunk_length)
+    query_swapped = query_reshaped[:, reference_image_index]  # select reference style
+    query_swapped = rearrange(query_swapped, "b f d c -> (b f) d c")
     
     # Rearrange and extract swapped key.
     key_reshaped = rearrange(key, "(b f) d c -> b f d c", f=chunk_length)
@@ -91,4 +95,5 @@ def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
     # Perform linear interpolation between the original and swapped features.
     new_key = (1.0 - style_intensity) * key + style_intensity * key_swapped
     new_value = (1.0 - style_intensity) * value + style_intensity * value_swapped
-    return new_key, new_value
+    new_query = (1.0 - style_intensity) * query + style_intensity * query_swapped
+    return new_query, new_key, new_value

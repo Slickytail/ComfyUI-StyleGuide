@@ -31,8 +31,7 @@ class VisualStyleProcessor(object):
         q = self.module_self.to_q(context)
         k = self.module_self.to_k(context)
         v = self.module_self.to_v(context)
-        k_orig = k
-        v_orig = v
+
         if self.enabled:
             if self.adain_queries:
                 q = adain(q)
@@ -42,19 +41,11 @@ class VisualStyleProcessor(object):
                 v = adain(v)
 
             # Perform swapping on k,v using reference style
-            k, v = swapping_attention(k, v, style_intensity=self.style_intensity)
+            q_s, k_s, v_s = swapping_attention(q, k, v, style_intensity=self.style_intensity)
         
-        q_style = get_attention(q,0)
-        k_style = get_attention(k,0)
-        v_style = get_attention(v,0)
-
-        q_text = get_attention(q,1)
-        k_text = get_attention(k,1)
-        v_text = get_attention(v,1)
-
         # Compute positive attention using the modified q,k,v
 
-        positive_attn = optimized_attention(q, k_style, v_style, self.module_self.heads)
+        positive_attn = optimized_attention(q, k_s, v_s, self.module_self.heads)
 
         # If NVQG is enabled, compute a negative branch and combine.
         if self.nvqg_enabled:
@@ -64,7 +55,7 @@ class VisualStyleProcessor(object):
             q_negative = self.module_self.to_q(x)
             # Optionally, you could skip any style normalization on q_negative.
             if mask is None:
-                negative_attn = optimized_attention(q_negative, k_orig, v_orig, self.module_self.heads)
+                negative_attn = optimized_attention(q_s, k, v, self.module_self.heads)
             else:
                 negative_attn = optimized_attention_masked(q_negative, k, v, self.module_self.heads, mask)       
 
