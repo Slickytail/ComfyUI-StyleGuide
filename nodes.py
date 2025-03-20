@@ -6,6 +6,52 @@ from .utils.cond_functions import cat_cond
 from .utils.style_functions import color_calibrate
 
 
+class StochasticEncodeReferenceSDXL:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "clean_latent": ("LATENT",),   # Clean latent (x₀)
+                "sigmas": ("SIGMAS",),         # Sigmas from your sampler
+                "timestep": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                "max_denoise": ("BOOLEAN", {"default": False}),
+                "enabled": ("BOOLEAN", {"default": True}),
+            }
+        }
+
+    CATEGORY = "VisualStylePrompting/latent"
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("noised_reference_latent",)
+    FUNCTION = "apply_stochastic_encode_sdxl"
+
+    def apply_stochastic_encode_sdxl(self, clean_latent, sigmas, timestep, max_denoise, enabled):
+        if not enabled:
+            return clean_latent
+        
+        x0 = clean_latent["samples"]
+        device = x0.device
+        dtype = x0.dtype
+        
+        # Ensure timestep is within valid range:
+        if timestep >= len(sigmas):
+            timestep = len(sigmas) - 1
+        
+        sigma = sigmas[timestep].to(device=device, dtype=dtype)
+        sigma = sigma.view(sigma.shape[:1] + (1,) * (x0.ndim - 1))
+        
+        noise = torch.randn_like(x0)
+        
+        # Apply noise scaling as in SDXL:
+        if max_denoise:
+            scaled_noise = noise * torch.sqrt(1.0 + sigma ** 2.0)
+        else:
+            scaled_noise = noise * sigma
+        
+        # Add the noise to the clean latent:
+        x_t = x0 + scaled_noise
+        
+        return ({"samples": x_t},)
+
 class ColorCalibration:
     @classmethod
     def INPUT_TYPES(s):
@@ -118,11 +164,13 @@ class ApplyVisualStyle:
         return (model, positive_cat, negative_cat, {"samples": latents, "noise_mask": denoise_mask})
 
 NODE_CLASS_MAPPINGS = {
+    "StochasticEncodeReferenceSDXL": StochasticEncodeReferenceSDXL,
     "ColorCalibration": ColorCalibration,
     "ApplyVisualStyle": ApplyVisualStyle,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "StochasticEncodeReferenceSDXL": "Stochastic Encode Reference SDXL",
     "ColorCalibration": "Color Calibration",
     "ApplyVisualStyle": "Apply Visual Style Prompting",
 }
