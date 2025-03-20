@@ -83,14 +83,18 @@ class ApplyVisualStyle:
     
         reference_samples = reference_latent["samples"]
 
+        allowed_blocks = ["output_blocks.1", "output_blocks.2", "output_blocks.3", "output_blocks.4", "output_blocks.5"]
+
         block_num = 0
         for n, m in model.model.diffusion_model.named_modules():
             if m.__class__.__name__ == "CrossAttention":
                 is_self_attn = "attn1" in n  # Only swap self-attention layers
                 is_output_block = "output_blocks" in n
+                
+                is_allowed = any(n.startswith(prefix) for prefix in allowed_blocks)
 
                 # explicitly only activate clearly output_blocks from skip_output_layers onwards
-                is_enabled = is_self_attn and is_output_block and (block_num >= skip_output_layers)
+                is_enabled = is_self_attn and is_output_block and is_allowed and (block_num >= skip_output_layers)
                 if is_output_block: 
                     block_num += 1
 

@@ -27,11 +27,12 @@ class VisualStyleProcessor(object):
 
     def visual_style_forward(self, x, context, value, mask=None):
         # Compute the query from input x
-        q = self.module_self.to_q(x)
         context = default(context, x)
+        q = self.module_self.to_q(context)
         k = self.module_self.to_k(context)
         v = self.module_self.to_v(context)
-
+        k_orig = k
+        v_orig = v
         if self.enabled:
             if self.adain_queries:
                 q = adain(q)
@@ -57,7 +58,7 @@ class VisualStyleProcessor(object):
             q_negative = self.module_self.to_q(x)
             # Optionally, you could skip any style normalization on q_negative.
             if mask is None:
-                negative_attn = optimized_attention(q_negative, k, v, self.module_self.heads)
+                negative_attn = optimized_attention(q_negative, k_orig, v_orig, self.module_self.heads)
             else:
                 negative_attn = optimized_attention_masked(q_negative, k, v, self.module_self.heads, mask)
             
