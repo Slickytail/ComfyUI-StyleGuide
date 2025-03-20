@@ -59,6 +59,15 @@ def q_content(query,chunk_size=2):
     query = rearrange(query, "b f d c -> (b f) d c")
     return query
 
+def get_attention(attn, index, chunk_size=2):
+    #index of 0 is style and index of 1 is text
+    chunk_length = attn.size()[0] // chunk_size #should be 2 
+    image_index = [index] * chunk_length  # this then becomes [0,0]
+    attn_reshaped = rearrange(attn, "(b f) d c -> b f d c", f=chunk_length)
+    attn_swapped = attn_reshaped[:, image_index]  # select reference style
+    attn_swapped = rearrange(attn_swapped, "b f d c -> (b f) d c")
+    return attn_swapped
+
 def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
     """
     Interpolate between the original key/value and the swapped key/value.
@@ -66,8 +75,8 @@ def swapping_attention(key, value, style_intensity=1.0, chunk_size=2):
     When style_intensity is 1, the swapped key/value are fully used.
     """
     # Compute the swapped keys and values as before.
-    chunk_length = key.size()[0] // chunk_size
-    reference_image_index = [0] * chunk_length  # select the reference style from each chunk
+    chunk_length = key.size()[0] // chunk_size #should be 2 
+    reference_image_index = [0] * chunk_length  # this then becomes [0,0]
     
     # Rearrange and extract swapped key.
     key_reshaped = rearrange(key, "(b f) d c -> b f d c", f=chunk_length)
