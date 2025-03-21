@@ -129,7 +129,7 @@ class ApplyVisualStyle:
     
         reference_samples = reference_latent["samples"]
 
-        allowed_blocks = ["output_blocks.1", "output_blocks.2", "output_blocks.3", "output_blocks.4", "output_blocks.5"]
+        allowed_blocks = ["output_blocks.1", "output_blocks.3", "output_blocks.4", "output_blocks.5"]
 
         block_num = 0
         for n, m in model.model.diffusion_model.named_modules():
