@@ -12,6 +12,7 @@ We also find that the output images can be a little bit blurry -- this is likely
 Additionally, the algorithm has trouble replicating photographic styles (it works better with animated, painterly, and artistic ones).
 
 Recommended settings:
+ - **Use an SDXL finetune, rather than the base model**. In the base model, the subject easily becomes unrecognizable. I've had good results with [RealvisXL5](https://civitai.com/models/139562?modelVersionId=789646), for example.
  - CFG around 3.0
  - A short, not too detailed positive prompt
  - 30 steps
