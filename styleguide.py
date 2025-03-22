@@ -22,8 +22,8 @@ class ApplyVisualStyle:
         }
 
     CATEGORY = "VisualStylePrompting"
-    RETURN_TYPES = ("MODEL", )
-    RETURN_NAMES = ("model", )
+    RETURN_TYPES = ("MODEL",)
+    RETURN_NAMES = ("model",)
 
     FUNCTION = "apply_visual_style_prompt"
 
@@ -38,7 +38,9 @@ class ApplyVisualStyle:
 
         model = model.clone()
         # convert the reference latent into the model-internal format
-        reference_samples = model.model.latent_format.process_in(reference_latent["samples"])
+        reference_samples = model.model.latent_format.process_in(
+            reference_latent["samples"]
+        )
 
         # todo: support multiple reference images
         # it's fairly clear how to do it for the conditional pass, but not for the uncond (NVQ) pass
@@ -58,7 +60,10 @@ class ApplyVisualStyle:
                 "cond_or_uncond"
             ]
             # combine the cond
-            c["c_crossattn"] = torch.cat((reference_cond[0][0].to(c["c_crossattn"].device), c["c_crossattn"]), dim=0)
+            c["c_crossattn"] = torch.cat(
+                (reference_cond[0][0].to(c["c_crossattn"].device), c["c_crossattn"]),
+                dim=0,
+            )
             # todo: this actually at this point means we should probably find a different way of injecting the reference image
             # maybe a special CFGGuider?
             y = reference_cond[0][1]["pooled_output"].to(c["y"].device)
@@ -108,15 +113,19 @@ class ApplyVisualStyle:
                 range(2) if id in [3, 4, 5] else range(10)
             )  # the first 3 are depth 10 and the other 3 are 2
             for index in block_indices:
+                swap_cond = blocknum >= skip_output_layers
                 if blocknum >= skip_output_layers:
                     patch_model_block(
                         model,
-                        {"swap_uncond": False, "swap_cond": True},
+                        {
+                            "swap_uncond": nvqg_enabled and not swap_cond,
+                            "swap_cond": swap_cond,
+                        },
                         ("output", id, index),
                     )
                 blocknum += 1
 
-        return (model, )
+        return (model,)
 
 
 NODE_CLASS_MAPPINGS = {
