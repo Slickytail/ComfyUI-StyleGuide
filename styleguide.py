@@ -5,7 +5,7 @@ import torch
 from .attention import patch_model_block
 
 
-def merge_cond(c: dict, cond: list) -> dict:
+def merge_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     """
     `c` is the dict containing the actual cond tensors that will be passed to the model.
     `cond` is the output from the conditioning node.
@@ -51,7 +51,8 @@ def merge_cond(c: dict, cond: list) -> dict:
             for t in v:
                 out = torch.cat((torch.zeros_like(t[0]).unsqueeze(0), t), dim=0)
                 # zero out the uncond
-                out[uncond_indices] = 0.0
+                if cn_zero_uncond:
+                    out[uncond_indices] = 0.0
                 new[k].append(out)
         c["control"] = new
     return c
@@ -66,6 +67,7 @@ class ApplyVisualStyle:
                 "reference_latent": ("LATENT",),
                 "reference_cond": ("CONDITIONING",),
                 "nvqg_enabled": ("BOOLEAN", {"default": True}),
+                "controlnet_use_cfg": ("BOOLEAN", {"default": True}),
                 "skip_output_layers": (
                     "INT",
                     {"default": 24, "min": 0, "max": 72, "step": 1},
@@ -105,6 +107,7 @@ class ApplyVisualStyle:
         reference_latent: dict,
         reference_cond: list,
         nvqg_enabled: bool,
+        controlnet_use_cfg: bool,
         skip_output_layers: int = 0,
         start_percent: float = 0.0,
         end_percent: float = 1.0,
@@ -140,7 +143,7 @@ class ApplyVisualStyle:
 
             visual = reference_samples.to(x.device)
             # combine the conds
-            c = merge_cond(p["c"], reference_cond)
+            c = merge_cond(p["c"], reference_cond, cn_zero_uncond=controlnet_use_cfg)
             # noise the reference latent ("stochastic encoding")
             visual = visual + torch.randn_like(visual) * sigma
             # add it at batch index 0
