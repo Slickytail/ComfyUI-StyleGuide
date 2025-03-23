@@ -5,6 +5,52 @@ from time import sleep
 from .attention import patch_model_block
 
 
+def merge_cond(c: dict, cond: list) -> dict:
+    """
+    `c` is the dict containing the actual cond tensors that will be passed to the model.
+    `cond` is the output from the conditioning node.
+
+    This function only supports a limited set of cond types.
+    We're essentially reimplementing part of the encoding/embedding chain that takes us from a conditioning object to a cond tensor dict.
+    And we're constrained by the fact that whatever is in the cond list has to be runnable in the same UNet call as the original one.
+    """
+
+    cond_tokens = cond[0][0]
+    cond_dict = cond[0][1]
+    c = c.copy()
+    c["transformer_options"] = c["transformer_options"].copy()
+    # treat the reference as uncond
+    c["transformer_options"]["cond_or_uncond"] = [1] + c["transformer_options"][
+        "cond_or_uncond"
+    ]
+    # combine the actual text encoding tokens
+    c["c_crossattn"] = torch.cat(
+        (cond_tokens.to(c["c_crossattn"].device), c["c_crossattn"]),
+        dim=0,
+    )
+    # combine the pooled putput
+    y = cond_dict["pooled_output"].to(c["y"].device)
+    # hacky, but the last part of the vector is height/width/crop values, which are gonna be the same anyway
+    y = torch.cat((y, c["y"][0:1, 1280:]), dim=1)
+    c["y"] = torch.cat((y, c["y"]), dim=0)
+    # combine the controlnet stuff
+    # we'll create a zero vector on the 0th dim
+    # NOTE: I think the "correct" approach is to zero out the controlnet
+    if c.get("control", None) is not None:
+        uncond_indices = torch.tensor(
+            [i for i, t in enumerate(c["transformer_options"]["cond_or_uncond"]) if t]
+        )
+        new = {}
+        for k, v in c["control"].items():
+            new[k] = []
+            for t in v:
+                out = torch.cat((torch.zeros_like(t[0]).unsqueeze(0), t), dim=0)
+                out[uncond_indices, ...] = 0
+                new[k].append(out)
+        c["control"] = new
+    return c
+
+
 class ApplyVisualStyle:
     @classmethod
     def INPUT_TYPES(s):
@@ -17,6 +63,25 @@ class ApplyVisualStyle:
                 "skip_output_layers": (
                     "INT",
                     {"default": 24, "min": 0, "max": 72, "step": 1},
+                ),
+                "start_percent": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "tooltip": "The start time % for the stylization.",
+                    },
+                ),
+                "end_percent": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "tooltip": "The end time % for the stylization.",
+                    },
                 ),
             }
         }
@@ -34,9 +99,18 @@ class ApplyVisualStyle:
         reference_cond,
         nvqg_enabled,
         skip_output_layers=0,
+        start_percent=0.0,
+        end_percent=1.0,
     ):
 
         model = model.clone()
+        sigma_start = model.get_model_object("model_sampling").percent_to_sigma(
+            start_percent
+        )
+        sigma_end = model.get_model_object("model_sampling").percent_to_sigma(
+            end_percent
+        )
+
         # convert the reference latent into the model-internal format
         reference_samples = model.model.latent_format.process_in(
             reference_latent["samples"]
@@ -45,43 +119,31 @@ class ApplyVisualStyle:
         # todo: support multiple reference images
         # it's fairly clear how to do it for the conditional pass, but not for the uncond (NVQ) pass
         assert reference_samples.shape[0] == 1
+        assert len(reference_cond) == 1
 
         # patch the model's forward function to noise and add the reference samples
         def add_reference(apply_model, p):
             x = p["input"]
             # t is actually the sigma, not the index
             t = p["timestep"]
-            c = p["c"].copy()
-            c["transformer_options"] = c["transformer_options"].copy()
-            # hmm, should we treat the reference generation as cond or uncond?
-            # it could have consequences for interaction w/ controlnet & ipadapter
-            # for now, treat it as cond
-            c["transformer_options"]["cond_or_uncond"] = [0] + c["transformer_options"][
-                "cond_or_uncond"
-            ]
-            # combine the cond
-            c["c_crossattn"] = torch.cat(
-                (reference_cond[0][0].to(c["c_crossattn"].device), c["c_crossattn"]),
-                dim=0,
-            )
-            # todo: this actually at this point means we should probably find a different way of injecting the reference image
-            # maybe a special CFGGuider?
-            y = reference_cond[0][1]["pooled_output"].to(c["y"].device)
-            # hacky, but the last part of the vector is height/width/crop values, which are gonna be the same anyway
-            y = torch.cat((y, c["y"][0:1, 1280:]), dim=1)
-            c["y"] = torch.cat((y, c["y"]), dim=0)
-            visual = reference_samples.to(x.device)
-            # noise the reference latent ("stochastic encoding")
-            visual = visual + torch.randn_like(visual) * t[0]
-            # add it at batch index 0
-            # at this point we're past the layer where a batch can be broken up
-            # so we can safely add a new element to the batch and know it won't cause problems
-            x = torch.concat((visual, x), dim=0)
-            # add the timestep
-            t = torch.cat((t[0:1], t), dim=0)
-            out = apply_model(x, t, **c)
-            # remove the useless denoised reference image
-            out = out[visual.shape[0] :]
+            sigma = t.detach().cpu()[0].item()
+            if sigma_end <= sigma <= sigma_start:
+                visual = reference_samples.to(x.device)
+                # combine the conds
+                c = merge_cond(p["c"], reference_cond)
+                # noise the reference latent ("stochastic encoding")
+                visual = visual + torch.randn_like(visual) * sigma
+                # add it at batch index 0
+                # at this point we're past the layer where a batch can be broken up
+                # so we can safely add a new element to the batch and know it won't cause problems
+                x = torch.concat((visual, x), dim=0)
+                # add the timestep
+                t = torch.cat((t[0:1], t), dim=0)
+                out = apply_model(x, t, **c)
+                # remove the useless denoised reference image
+                out = out[visual.shape[0] :]
+            else:
+                out = apply_model(x, t, **p["c"])
             return out
 
         model.set_model_unet_function_wrapper(add_reference)
@@ -96,14 +158,24 @@ class ApplyVisualStyle:
                 for index in block_indices:
                     patch_model_block(
                         model,
-                        {"swap_uncond": True, "swap_cond": False},
+                        {
+                            "swap_uncond": True,
+                            "swap_cond": False,
+                            "sigma_start": sigma_start,
+                            "sigma_end": sigma_end,
+                        },
                         ("input", id, index),
                     )
             # patch middle blocks
             for index in range(10):
                 patch_model_block(
                     model,
-                    {"swap_uncond": True, "swap_cond": False},
+                    {
+                        "swap_uncond": True,
+                        "swap_cond": False,
+                        "sigma_start": sigma_start,
+                        "sigma_end": sigma_end,
+                    },
                     ("middle", 1, index),
                 )
         # patch output blocks
@@ -120,6 +192,8 @@ class ApplyVisualStyle:
                         {
                             "swap_uncond": nvqg_enabled and not swap_cond,
                             "swap_cond": swap_cond,
+                            "sigma_start": sigma_start,
+                            "sigma_end": sigma_end,
                         },
                         ("output", id, index),
                     )

@@ -26,26 +26,37 @@ class Attn1Replace:
 
     def __call__(self, q, k, v, extra_options):
         dtype = q.dtype
-        # List of [0, 1], [0], [1], ...
-        # 0 means conditional, 1 means unconditional
-        cond_or_uncond = extra_options["cond_or_uncond"]
-        # we added the unconditional query on the 0th index
-        q_ref = q[0]
-        k_ref = k[0]
-        v_ref = v[0]
-        # if we're doing NVQG, then the unconditional images should use q_ref instead
-        if self.kwargs.get("swap_uncond", False):
-            q = torch.stack(
-                [[q_i, q_ref][c] for q_i, c in zip(q, cond_or_uncond)], dim=0
-            )
-        if self.kwargs.get("swap_cond", False):
-            # swap the keys and values in the conditional generation
-            k = torch.stack(
-                [[k_ref, k_i][c] for k_i, c in zip(k, cond_or_uncond)], dim=0
-            )
-            v = torch.stack(
-                [[v_ref, v_i][c] for v_i, c in zip(v, cond_or_uncond)], dim=0
-            )
+        # check if we should disable on certain timesteps
+        sigma = (
+            extra_options["sigmas"].detach().cpu()[0].item()
+            if "sigmas" in extra_options
+            else 999999999.9
+        )
+        if (
+            self.kwargs.get("sigma_end", 0.0)
+            <= sigma
+            <= self.kwargs.get("sigma_start", 999999999.9)
+        ):
+            # List of [0, 1], [0], [1], ...
+            # 0 means conditional, 1 means unconditional
+            cond_or_uncond = extra_options["cond_or_uncond"]
+            # we added the unconditional query on the 0th index
+            q_ref = q[0]
+            k_ref = k[0]
+            v_ref = v[0]
+            # if we're doing NVQG, then the unconditional images should use q_ref instead
+            if self.kwargs.get("swap_uncond", False):
+                q = torch.stack(
+                    [[q_i, q_ref][c] for q_i, c in zip(q, cond_or_uncond)], dim=0
+                )
+            if self.kwargs.get("swap_cond", False):
+                # swap the keys and values in the conditional generation
+                k = torch.stack(
+                    [[k_ref, k_i][c] for k_i, c in zip(k, cond_or_uncond)], dim=0
+                )
+                v = torch.stack(
+                    [[v_ref, v_i][c] for v_i, c in zip(v, cond_or_uncond)], dim=0
+                )
         # call attention
         out = optimized_attention(q, k, v, extra_options["n_heads"])
         return out.to(dtype=dtype)

@@ -54,22 +54,23 @@ class ColorGradeEulerSampler:
             "required": {
                 "model": ("MODEL",),
                 "reference": ("LATENT", {"tooltip": "The reference latent"}),
-                "start": (
-                    "INT",
+                "start_percent": (
+                    "FLOAT",
                     {
-                        "default": 10,
-                        "min": 0,
-                        "max": 10000,
-                        "tooltip": "The start timestep for the colorgrading.",
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "tooltip": "The start time % for the colorgrading.",
                     },
                 ),
-                "end": (
-                    "INT",
+                "end_percent": (
+                    "FLOAT",
                     {
-                        "default": 15,
-                        "min": 0,
-                        "max": 10000,
-                        "tooltip": "The end timestep for the colorgrading.",
+                        "default": 0.8,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "tooltip": "The end time % for the colorgrading.",
                     },
                 ),
             },
@@ -81,7 +82,9 @@ class ColorGradeEulerSampler:
     CATEGORY = "VisualStylePrompting"
     DESCRIPTION = "sampler to color grade the latent to match the reference latent"
 
-    def create_sampler(self, model, reference, start, end):
+    def create_sampler(
+        self, model, reference, start_percent: float, end_percent: float
+    ):
         # inside the model, the latent has a different scale/mean than what the VAE processes
         # so in order to get the right mean/variance, we need to rescale the reference latent
         ref = model.model.latent_format.process_in(reference["samples"])
@@ -89,7 +92,7 @@ class ColorGradeEulerSampler:
         # we actually want the mean standard deviation per image -- if we try to take the std over multiple images, it'll be much higher than expected.
         std_reference = ref.std(dim=(2, 3), keepdim=True).mean(dim=0, keepdim=True)
 
-        if end <= start:
+        if end_percent <= start_percent:
             raise ValueError("End must be greater than start.")
 
         # custom euler sampler to add the calibration step
@@ -107,8 +110,8 @@ class ColorGradeEulerSampler:
             s_noise=1.0,
         ):
             """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
-            if end <= start:
-                raise ValueError("End must be greater than start.")
+            i_start = int(start_percent * len(sigmas))
+            i_end = int(end_percent * len(sigmas))
             extra_args = {} if extra_args is None else extra_args
             s_in = x.new_ones([x.shape[0]])
             for i in trange(len(sigmas) - 1, disable=disable):
@@ -129,7 +132,7 @@ class ColorGradeEulerSampler:
                 denoised = model(x, sigma_hat * s_in, **extra_args)
                 d = to_d(x, sigma_hat, denoised)
                 # colorgrade the latent
-                if start <= i <= end:
+                if i_start <= i <= i_end:
                     denoised = adain_latent(denoised, mean_reference, std_reference)
 
                 if callback is not None:
