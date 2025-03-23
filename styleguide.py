@@ -64,6 +64,16 @@ class ApplyVisualStyle:
         return {
             "required": {
                 "model": ("MODEL",),
+                "seed": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0xFFFFFFFFFFFFFFFF,
+                        "control_after_generate": True,
+                        "tooltip": "The random seed used for creating the noise.",
+                    },
+                ),
                 "reference_latent": ("LATENT",),
                 "reference_cond": ("CONDITIONING",),
                 "nvqg_enabled": ("BOOLEAN", {"default": True}),
@@ -104,6 +114,7 @@ class ApplyVisualStyle:
     def apply_visual_style_prompt(
         self,
         model: comfy.model_patcher.ModelPatcher,
+        seed: int,
         reference_latent: dict,
         reference_cond: list,
         nvqg_enabled: bool,
@@ -141,11 +152,12 @@ class ApplyVisualStyle:
             if not (sigma_end <= sigma <= sigma_start):
                 return apply_model(x, t, **p["c"])
 
-            visual = reference_samples.to(x.device)
             # combine the conds
             c = merge_cond(p["c"], reference_cond, cn_zero_uncond=controlnet_use_cfg)
             # noise the reference latent ("stochastic encoding")
-            visual = visual + torch.randn_like(visual) * sigma
+            visual = reference_samples.to(x.device)
+            noise = comfy.sample.prepare_noise(visual, seed)
+            visual = visual + noise.to(x.device) * sigma
             # add it at batch index 0
             # at this point we're past the layer where a batch can be broken up
             # so we can safely add a new element to the batch and know it won't cause problems
