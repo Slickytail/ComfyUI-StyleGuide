@@ -186,59 +186,6 @@
       ]
     },
     {
-      "id": 16,
-      "type": "ApplyVisualStyle",
-      "pos": [
-        900,
-        60
-      ],
-      "size": [
-        352.79998779296875,
-        170
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 23
-        },
-        {
-          "name": "reference_latent",
-          "type": "LATENT",
-          "link": 24
-        },
-        {
-          "name": "reference_cond",
-          "type": "CONDITIONING",
-          "link": 58
-        }
-      ],
-      "outputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "links": [
-            63
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ApplyVisualStyle"
-      },
-      "widgets_values": [
-        true,
-        24,
-        0,
-        1
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
-    {
       "id": 21,
       "type": "ColorGradeEulerSampler",
       "pos": [
@@ -722,6 +669,62 @@
       ],
       "color": "#432",
       "bgcolor": "#653"
+    },
+    {
+      "id": 16,
+      "type": "ApplyVisualStyle",
+      "pos": [
+        900,
+        -10
+      ],
+      "size": [
+        352.79998779296875,
+        242
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 23
+        },
+        {
+          "name": "reference_latent",
+          "type": "LATENT",
+          "link": 24
+        },
+        {
+          "name": "reference_cond",
+          "type": "CONDITIONING",
+          "link": 58
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            63
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ApplyVisualStyle"
+      },
+      "widgets_values": [
+        1,
+        "fixed",
+        true,
+        1,
+        24,
+        0,
+        1
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
     }
   ],
   "links": [
@@ -930,10 +933,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.0152559799477427,
+      "scale": 0.839054528882413,
       "offset": [
-        -689.4729165759005,
-        -4.144330170630047
+        -377.9162991310777,
+        186.01855050675124
       ]
     }
   },

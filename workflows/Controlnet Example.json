@@ -186,59 +186,6 @@
       ]
     },
     {
-      "id": 16,
-      "type": "ApplyVisualStyle",
-      "pos": [
-        900,
-        60
-      ],
-      "size": [
-        352.79998779296875,
-        170
-      ],
-      "flags": {},
-      "order": 15,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 23
-        },
-        {
-          "name": "reference_latent",
-          "type": "LATENT",
-          "link": 24
-        },
-        {
-          "name": "reference_cond",
-          "type": "CONDITIONING",
-          "link": 58
-        }
-      ],
-      "outputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "links": [
-            63
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ApplyVisualStyle"
-      },
-      "widgets_values": [
-        true,
-        24,
-        0,
-        1
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
-    {
       "id": 30,
       "type": "LoadImage",
       "pos": [
@@ -275,40 +222,6 @@
       "widgets_values": [
         "example.png",
         "image"
-      ],
-      "color": "#233",
-      "bgcolor": "#355"
-    },
-    {
-      "id": 28,
-      "type": "ControlNetLoader",
-      "pos": [
-        900,
-        -110
-      ],
-      "size": [
-        350,
-        60
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CONTROL_NET",
-          "type": "CONTROL_NET",
-          "links": [
-            70
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ControlNetLoader"
-      },
-      "widgets_values": [
-        "xinsir-cn-canny-sdxl-1.0-v2.safetensors"
       ],
       "color": "#233",
       "bgcolor": "#355"
@@ -574,7 +487,7 @@
         314
       ],
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -852,7 +765,7 @@
         98
       ],
       "flags": {},
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -905,7 +818,7 @@
         82
       ],
       "flags": {},
-      "order": 4,
+      "order": 3,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -943,7 +856,7 @@
         82
       ],
       "flags": {},
-      "order": 5,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -968,6 +881,96 @@
       ],
       "color": "#432",
       "bgcolor": "#653"
+    },
+    {
+      "id": 28,
+      "type": "ControlNetLoader",
+      "pos": [
+        900,
+        -130
+      ],
+      "size": [
+        350,
+        60
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CONTROL_NET",
+          "type": "CONTROL_NET",
+          "links": [
+            70
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ControlNetLoader"
+      },
+      "widgets_values": [
+        "xinsir-cn-canny-sdxl-1.0-v2.safetensors"
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 16,
+      "type": "ApplyVisualStyle",
+      "pos": [
+        900,
+        -10
+      ],
+      "size": [
+        352.79998779296875,
+        242
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 23
+        },
+        {
+          "name": "reference_latent",
+          "type": "LATENT",
+          "link": 24
+        },
+        {
+          "name": "reference_cond",
+          "type": "CONDITIONING",
+          "link": 58
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            63
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ApplyVisualStyle"
+      },
+      "widgets_values": [
+        1,
+        "fixed",
+        true,
+        1,
+        24,
+        0,
+        1
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
     }
   ],
   "links": [
@@ -1240,10 +1243,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.3558410273836861,
+      "scale": 1.3513057093104168,
       "offset": [
-        1006.2278076484556,
-        1126.7785312784151
+        -1143.175128970203,
+        63.37799002321407
       ]
     }
   },
