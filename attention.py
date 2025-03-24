@@ -1,3 +1,4 @@
+from itertools import chain
 import torch
 from comfy.ldm.modules.attention import optimized_attention
 
@@ -32,15 +33,30 @@ class Attn1Replace:
             if "sigmas" in extra_options
             else 999999999.9
         )
-        if (
+        should_activate = (
             self.args.get("sigma_end", 0.0)
             <= sigma
             <= self.args.get("sigma_start", 999999999.9)
-        ):
+        )
+        # mixingweight, basically
+        strength = self.args.get("strength", 1.0)
+        out: torch.Tensor
+        # if the strength is 1.0, we can optimize slightly by not computing the original attention
+        if (strength == 1.0) and should_activate:
+            out = 0.0
+        else:
+            # original attention call before we perturb the queries/values
+            out = optimized_attention(q, k, v, extra_options["n_heads"])
+        if should_activate:
             # List of [0, 1], [0], [1], ...
             # 0 means conditional, 1 means unconditional
-            cond_or_uncond = extra_options["cond_or_uncond"]
-            # we added the unconditional query on the 0th index
+            _cond_or_uncond = extra_options["cond_or_uncond"]
+            batches = (q.shape[0] - 1) // len(_cond_or_uncond)
+            # essentially "repeat_interleave" on _cond_or_uncond
+            cond_or_uncond = [0] + list(
+                chain(*([i] * batches for i in _cond_or_uncond))
+            )
+            # we added the reference image on the 0th index
             q_ref = q[0]
             k_ref = k[0]
             v_ref = v[0]
@@ -57,6 +73,8 @@ class Attn1Replace:
                 v = torch.stack(
                     [[v_ref, v_i][c] for v_i, c in zip(v, cond_or_uncond)], dim=0
                 )
-        # call attention
-        out = optimized_attention(q, k, v, extra_options["n_heads"])
+            # call attention
+            out_style = optimized_attention(q, k, v, extra_options["n_heads"])
+            # mix based on strength
+            out = out * (1 - strength) + out_style * strength
         return out.to(dtype=dtype)

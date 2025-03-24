@@ -227,47 +227,6 @@
       "bgcolor": "#355"
     },
     {
-      "id": 39,
-      "type": "Canny",
-      "pos": [
-        900,
-        -260
-      ],
-      "size": [
-        350,
-        82
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 103
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            104
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "Canny"
-      },
-      "widgets_values": [
-        0.4,
-        0.8
-      ],
-      "color": "#233",
-      "bgcolor": "#355"
-    },
-    {
       "id": 21,
       "type": "ColorGradeEulerSampler",
       "pos": [
@@ -883,49 +842,15 @@
       "bgcolor": "#653"
     },
     {
-      "id": 28,
-      "type": "ControlNetLoader",
-      "pos": [
-        900,
-        -130
-      ],
-      "size": [
-        350,
-        60
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CONTROL_NET",
-          "type": "CONTROL_NET",
-          "links": [
-            70
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ControlNetLoader"
-      },
-      "widgets_values": [
-        "xinsir-cn-canny-sdxl-1.0-v2.safetensors"
-      ],
-      "color": "#233",
-      "bgcolor": "#355"
-    },
-    {
       "id": 16,
       "type": "ApplyVisualStyle",
       "pos": [
         900,
-        -10
+        -40
       ],
       "size": [
         352.79998779296875,
-        242
+        266
       ],
       "flags": {},
       "order": 15,
@@ -965,12 +890,88 @@
         "fixed",
         true,
         1,
+        1,
         24,
         0,
         1
       ],
       "color": "#323",
       "bgcolor": "#535"
+    },
+    {
+      "id": 39,
+      "type": "Canny",
+      "pos": [
+        900,
+        -290
+      ],
+      "size": [
+        350,
+        82
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 103
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            104
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Canny"
+      },
+      "widgets_values": [
+        0.4,
+        0.8
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 28,
+      "type": "ControlNetLoader",
+      "pos": [
+        900,
+        -160
+      ],
+      "size": [
+        350,
+        60
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CONTROL_NET",
+          "type": "CONTROL_NET",
+          "links": [
+            70
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ControlNetLoader"
+      },
+      "widgets_values": [
+        "xinsir-cn-canny-sdxl-1.0-v2.safetensors"
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
     }
   ],
   "links": [
@@ -1243,10 +1244,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.3513057093104168,
+      "scale": 0.630394086312855,
       "offset": [
-        -1143.175128970203,
-        63.37799002321407
+        -159.63875491646766,
+        570.469815919737
       ]
     }
   },

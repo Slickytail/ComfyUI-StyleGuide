@@ -19,10 +19,12 @@ def merge_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     cond_dict = cond[0][1]
     c = c.copy()
     c["transformer_options"] = c["transformer_options"].copy()
-    # treat the reference as uncond
-    c["transformer_options"]["cond_or_uncond"] = [1] + c["transformer_options"][
-        "cond_or_uncond"
-    ]
+    # we're not going to add a cond_or_uncond entry for the reference
+    # within comfy official code, cond_or_uncond is only used for the SelfAttentionGuidance node
+    # anyway, if we comibne StyleGuide with IPAdapter or something that does use cond_or_uncond, we'll have to make a compat patch
+    # c["transformer_options"]["cond_or_uncond"] = [1] + c["transformer_options"][
+    #    "cond_or_uncond"
+    # ]
     # combine the actual text encoding tokens
     c["c_crossattn"] = torch.cat(
         (cond_tokens.to(c["c_crossattn"].device), c["c_crossattn"]),
@@ -71,13 +73,47 @@ class ApplyVisualStyle:
                         "min": 0,
                         "max": 0xFFFFFFFFFFFFFFFF,
                         "control_after_generate": True,
-                        "tooltip": "The random seed used for creating the noise.",
+                        "tooltip": "The random seed used for noising the style latent.",
                     },
                 ),
-                "reference_latent": ("LATENT",),
-                "reference_cond": ("CONDITIONING",),
-                "nvqg_enabled": ("BOOLEAN", {"default": True}),
-                "controlnet_use_cfg": ("BOOLEAN", {"default": True}),
+                "reference_latent": (
+                    "LATENT",
+                    {
+                        "tooltip": "The encoded latent (without noise) of the style image."
+                    },
+                ),
+                "reference_cond": (
+                    "CONDITIONING",
+                    {
+                        "tooltip": "The text conditioning to be passed for the style image's unet call. Doesn't have a big effect."
+                    },
+                ),
+                "nvqg_enabled": (
+                    "BOOLEAN",
+                    {
+                        "default": True,
+                        "tooltip": "Whether to enable Negative Visual Query Guidance, helping to reduce content leaking.",
+                    },
+                ),
+                "controlnet_use_cfg": (
+                    "BOOLEAN",
+                    {
+                        "default": True,
+                        "tooltip": "Whether to zero out controlnet activations on the uncond. "
+                                   "This increases strength of controlnet, preventing it from "
+                                   "being drowned out by style transfer.",
+                    },
+                ),
+                "strength": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "tooltip": "How strong the style effect should be.",
+                    },
+                ),
                 "skip_output_layers": (
                     "INT",
                     {"default": 24, "min": 0, "max": 72, "step": 1},
@@ -119,6 +155,7 @@ class ApplyVisualStyle:
         reference_cond: list,
         nvqg_enabled: bool,
         controlnet_use_cfg: bool,
+        strength: float = 1.0,
         skip_output_layers: int = 0,
         start_percent: float = 0.0,
         end_percent: float = 1.0,
@@ -177,6 +214,9 @@ class ApplyVisualStyle:
         # and we guarantee that it won't be run in a separate batch from the cond/uncond images.
         model.set_model_unet_function_wrapper(add_reference)
 
+        style_kwargs = dict(
+            sigma_start=sigma_start, sigma_end=sigma_end, strength=strength
+        )
         # according to the paper, the NVQ is added in the input and middle blocks
         # we add it to input and middle, and also to the out blocks (up to the skip index)
         if nvqg_enabled:
@@ -191,8 +231,7 @@ class ApplyVisualStyle:
                         ("input", id, index),
                         swap_uncond=True,
                         swap_cond=False,
-                        sigma_start=sigma_start,
-                        sigma_end=sigma_end,
+                        **style_kwargs
                     )
             # patch middle blocks
             for index in range(10):
@@ -201,8 +240,7 @@ class ApplyVisualStyle:
                     ("middle", 1, index),
                     swap_uncond=True,
                     swap_cond=False,
-                    sigma_start=sigma_start,
-                    sigma_end=sigma_end,
+                    **style_kwargs
                 )
         # patch output blocks
         blocknum = 0
@@ -219,8 +257,7 @@ class ApplyVisualStyle:
                         # the blocks that are skipped are included in the NVQG query injection
                         swap_uncond=nvqg_enabled and not swap_cond,
                         swap_cond=swap_cond,
-                        sigma_start=sigma_start,
-                        sigma_end=sigma_end,
+                        **style_kwargs
                     )
                 blocknum += 1
 
