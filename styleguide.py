@@ -22,9 +22,6 @@ def merge_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     # we're not going to add a cond_or_uncond entry for the reference
     # within comfy official code, cond_or_uncond is only used for the SelfAttentionGuidance node
     # anyway, if we comibne StyleGuide with IPAdapter or something that does use cond_or_uncond, we'll have to make a compat patch
-    # c["transformer_options"]["cond_or_uncond"] = [1] + c["transformer_options"][
-    #    "cond_or_uncond"
-    # ]
     # combine the actual text encoding tokens
     c["c_crossattn"] = torch.cat(
         (cond_tokens.to(c["c_crossattn"].device), c["c_crossattn"]),
@@ -42,7 +39,11 @@ def merge_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     if c.get("control", None) is not None:
         # the batch indices to zero out
         uncond_indices = torch.tensor(
-            [i for i, t in enumerate(c["transformer_options"]["cond_or_uncond"]) if t]
+            [
+                i + 1
+                for i, t in enumerate(c["transformer_options"]["cond_or_uncond"])
+                if t
+            ]
         )
         new = {}
         # the control data is a mapping from [in/middle/out] to lists of tensors: activations to be added inside the model
@@ -100,8 +101,8 @@ class ApplyVisualStyle:
                     {
                         "default": True,
                         "tooltip": "Whether to zero out controlnet activations on the uncond. "
-                                   "This increases strength of controlnet, preventing it from "
-                                   "being drowned out by style transfer.",
+                        "This increases strength of controlnet, preventing it from "
+                        "being drowned out by style transfer.",
                     },
                 ),
                 "strength": (
