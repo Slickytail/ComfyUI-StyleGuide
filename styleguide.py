@@ -3,62 +3,7 @@ import comfy
 import torch
 
 from .attention import patch_model_block
-
-
-def merge_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
-    """
-    `c` is the dict containing the actual cond tensors that will be passed to the model.
-    `cond` is the output from the conditioning node.
-
-    This function only supports a limited set of cond types.
-    We're essentially reimplementing part of the encoding/embedding chain that takes us from a conditioning object to a cond tensor dict.
-    And we're constrained by the fact that whatever is in the cond list has to be runnable in the same UNet call as the original one.
-    """
-
-    cond_tokens = cond[0][0]
-    cond_dict = cond[0][1]
-    c = c.copy()
-    c["transformer_options"] = c["transformer_options"].copy()
-    # we're not going to add a cond_or_uncond entry for the reference
-    # within comfy official code, cond_or_uncond is only used for the SelfAttentionGuidance node
-    # anyway, if we comibne StyleGuide with IPAdapter or something that does use cond_or_uncond, we'll have to make a compat patch
-    # combine the actual text encoding tokens
-    c["c_crossattn"] = torch.cat(
-        (cond_tokens.to(c["c_crossattn"].device), c["c_crossattn"]),
-        dim=0,
-    )
-    # combine the pooled putput
-    y = cond_dict["pooled_output"].to(c["y"].device)
-    # hacky, but the last part of the vector is height/width/crop values, which are gonna be the same anyway
-    y = torch.cat((y, c["y"][0:1, 1280:]), dim=1)
-    c["y"] = torch.cat((y, c["y"]), dim=0)
-    # combine the controlnet stuff
-    # we'll zero out the activations on the new component
-    # we're also going to zero out the controlnet on the uncond inputs
-    # this increases the strength of the controlnet. otherwise it gets drowned out by the style injection.
-    if c.get("control", None) is not None:
-        # the batch indices to zero out
-        uncond_indices = torch.tensor(
-            [
-                i + 1
-                for i, t in enumerate(c["transformer_options"]["cond_or_uncond"])
-                if t
-            ]
-        )
-        new = {}
-        # the control data is a mapping from [in/middle/out] to lists of tensors: activations to be added inside the model
-        old: dict[str, list[torch.Tensor]]
-        old = c["control"]
-        for k, v in old.items():
-            new[k] = []
-            for t in v:
-                out = torch.cat((torch.zeros_like(t[0]).unsqueeze(0), t), dim=0)
-                # zero out the uncond
-                if cn_zero_uncond:
-                    out[uncond_indices] = 0.0
-                new[k].append(out)
-        c["control"] = new
-    return c
+from .cond import create_merged_cond, create_hydrate_cond
 
 
 class ApplyVisualStyle:
@@ -80,7 +25,13 @@ class ApplyVisualStyle:
                 "reference_latent": (
                     "LATENT",
                     {
-                        "tooltip": "The encoded latent (without noise) of the style image."
+                        "tooltip": "The encoded latent (without noise) of the style image, at its original size/shape. It should be the same # MP as the generation image, though."
+                    },
+                ),
+                "reference_resized": (
+                    "LATENT",
+                    {
+                        "tooltip": "The encoded latent (without noise) of the style image, resized/cropped to the same shape as the generated image."
                     },
                 ),
                 "reference_cond": (
@@ -153,6 +104,7 @@ class ApplyVisualStyle:
         model: comfy.model_patcher.ModelPatcher,
         seed: int,
         reference_latent: dict,
+        reference_resized: dict,
         reference_cond: list,
         nvqg_enabled: bool,
         controlnet_use_cfg: bool,
@@ -171,13 +123,20 @@ class ApplyVisualStyle:
         )
 
         # convert the reference latent into the model-internal format
-        reference_samples = model.model.latent_format.process_in(
+        orig_samples = model.get_model_object("latent_format").process_in(
             reference_latent["samples"]
         )
+        resized_samples = model.get_model_object("latent_format").process_in(
+            reference_resized["samples"]
+        )
+        # if the original reference is the same shape as the generated image
+        # then we can just run it through at the same time,
+        # and we don't need to do any KV caching
+        needs_separate_hydrate = orig_samples.shape != resized_samples.shape
 
         # todo: support multiple reference images
         # it's fairly clear how to do it for the conditional pass, but not for the uncond (NVQ) pass
-        assert reference_samples.shape[0] == 1
+        assert orig_samples.shape[0] == 1
         assert len(reference_cond) == 1
 
         # patch the model's forward function to noise and add the reference samples
@@ -185,26 +144,53 @@ class ApplyVisualStyle:
             x = p["input"]
             # t is actually the sigma, not the index
             t = p["timestep"]
+            c = p["c"]
             sigma = t.detach().cpu()[0].item()
             # skip the reference injection at some timesteps
             if not (sigma_end <= sigma <= sigma_start):
                 return apply_model(x, t, **p["c"])
 
-            # combine the conds
-            c = merge_cond(p["c"], reference_cond, cn_zero_uncond=controlnet_use_cfg)
-            # noise the reference latent ("stochastic encoding")
-            visual = reference_samples.to(x.device)
-            noise = comfy.sample.prepare_noise(visual, seed)
-            visual = visual + noise.to(x.device) * sigma
-            # add it at batch index 0
-            # at this point we're past the layer where a batch can be broken up
-            # so we can safely add a new element to the batch and know it won't cause problems
-            x = torch.concat((visual, x), dim=0)
-            # add the timestep
-            t = torch.cat((t[0:1], t), dim=0)
+            should_hydrate = needs_separate_hydrate and (
+                [0] in c["transformer_options"]["cond_or_uncond"]
+            )
+            should_merge = (not needs_separate_hydrate) or (
+                [1] in c["transformer_options"]["cond_or_uncond"] and nvqg_enabled
+            )
+
+            # if we're going to run a cond batch, we might need to hydrate the KV cache
+            if should_hydrate:
+                # run the reference image through the model
+                # add noise
+                visual_orig = orig_samples.to(x.device)
+                noise_orig = comfy.sample.prepare_noise(visual_orig, seed)
+                visual_orig = visual_orig + noise_orig.to(x.device) * sigma
+                c_cache = create_hydrate_cond(
+                    c, reference_cond, visual_orig, x.device, model.model
+                )
+                # run the model and discard the output
+                apply_model(visual_orig, t[0:1], **c_cache)
+
+            # if we have an uncond, or if we're doing the reference in the same batch, add the resized reference to the batch
+            if should_merge:
+                # combine the conds
+                c = create_merged_cond(
+                    c, reference_cond, cn_zero_uncond=controlnet_use_cfg
+                )
+                # noise the reference latent ("stochastic encoding")
+                visual = resized_samples.to(x.device)
+                noise = comfy.sample.prepare_noise(visual, seed)
+                visual = visual + noise.to(x.device) * sigma
+                # add it at batch index 0
+                # at this point we're past the layer where a batch can be broken up
+                # so we can safely add a new element to the batch and know it won't cause problems
+                x = torch.concat((visual, x), dim=0)
+                # add the timestep
+                t = torch.cat((t[0:1], t), dim=0)
+
             out = apply_model(x, t, **c)
-            # remove the useless denoised reference image
-            out = out[visual.shape[0] :]
+            # remove the useless denoised reference image, if we added it
+            if should_merge:
+                out = out[visual.shape[0] :]
             return out
 
         # the unet wrapper is the innermost wrapper around the model
