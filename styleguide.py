@@ -239,15 +239,14 @@ class ApplyVisualStyle:
             )  # the first 3 are depth 10 and the other 3 are 2
             for index in block_indices:
                 swap_cond = blocknum >= skip_output_layers
-                if blocknum >= skip_output_layers:
-                    patch_model_block(
-                        model,
-                        ("output", id, index),
-                        # the blocks that are skipped are included in the NVQG query injection
-                        swap_uncond=nvqg_enabled and not swap_cond,
-                        swap_cond=swap_cond,
-                        **style_kwargs
-                    )
+                patch_model_block(
+                    model,
+                    ("output", id, index),
+                    # the blocks that are skipped are included in the NVQG query injection
+                    swap_uncond=nvqg_enabled and not swap_cond,
+                    swap_cond=swap_cond,
+                    **style_kwargs
+                )
                 blocknum += 1
 
         return (model,)
