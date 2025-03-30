@@ -136,7 +136,7 @@ class ApplyVisualStyle:
 
         # todo: support multiple reference images
         # it's fairly clear how to do it for the conditional pass, but not for the uncond (NVQ) pass
-        assert orig_samples.shape[0] == 1
+        assert resized_samples.shape[0] == 1
         assert len(reference_cond) == 1
 
         # patch the model's forward function to noise and add the reference samples
@@ -150,11 +150,13 @@ class ApplyVisualStyle:
             if not (sigma_end <= sigma <= sigma_start):
                 return apply_model(x, t, **p["c"])
 
+            # todo: if nvqg is disabled, we can accept any shape of x by hydrating
+
             should_hydrate = needs_separate_hydrate and (
-                [0] in c["transformer_options"]["cond_or_uncond"]
+                0 in c["transformer_options"]["cond_or_uncond"]
             )
             should_merge = (not needs_separate_hydrate) or (
-                [1] in c["transformer_options"]["cond_or_uncond"] and nvqg_enabled
+                1 in c["transformer_options"]["cond_or_uncond"] and nvqg_enabled
             )
 
             # if we're going to run a cond batch, we might need to hydrate the KV cache

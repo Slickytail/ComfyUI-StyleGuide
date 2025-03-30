@@ -7,19 +7,24 @@ def create_hydrate_cond(c, cond: list, noise, device, model) -> dict:
 
     width = noise.shape[3] * 8
     height = noise.shape[2] * 8
+    bs = noise.shape[0]
+
     return {
-        "c_crossattn": cond_tokens.to(device),
+        "c_crossattn": cond_tokens.to(device).expand(bs, -1, -1),
         "y": model.encode_adm(
             pooled_output=cond_dict["pooled_output"],
             width=width,
             height=height,
             target_width=width,
             target_height=height,
-        ).to(device),
+        )
+        .to(device)
+        .expand(bs, -1),
         "transformer_options": {
             # so we have to copy most of the stuff here
             # but is there anything that we *dont* want to copy?
             **c["transformer_options"],
+            # our attention processor will check for hydrate_only
             "hydrate_only": True,
             "cond_or_uncond": [0],
         },
@@ -40,7 +45,8 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     cond_dict = cond[0][1]
     c = c.copy()
     c["transformer_options"] = c["transformer_options"].copy()
-    c["transformer_options"]["ref_index"] = 0
+    # our attention implementation will check for n_ref to find out how many ref images there are
+    c["transformer_options"]["n_ref"] = 1
     # within comfy official code, cond_or_uncond is only used for the SelfAttentionGuidance node
     # combine the actual text encoding tokens
     c["c_crossattn"] = torch.cat(
@@ -58,12 +64,11 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     # this increases the strength of the controlnet. otherwise it gets drowned out by the style injection.
     if c.get("control", None) is not None:
         # the batch indices to zero out
-        # we increment these because we're going to add the reference on the zero index
         uncond_indices = torch.tensor(
             [
-                i + 1
+                i
                 for i, t in enumerate(c["transformer_options"]["cond_or_uncond"])
-                if t
+                if t == 1
             ]
         )
         new = {}

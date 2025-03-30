@@ -1,5 +1,6 @@
 from itertools import chain
 import torch
+from torch import Tensor
 from comfy.ldm.modules.attention import optimized_attention
 
 
@@ -22,15 +23,19 @@ def patch_model_block(model, key, **kwargs):
 
 
 class Attn1Replace:
+    """
+    A self-attention processor that swaps keys and values for cond elements, and queries for uncond elements.
+    """
+
     def __init__(self, **kwargs):
         self.args = kwargs
-        self.cache_k = None
-        self.cache_v = None
+        self.cache_k: Tensor | None = None
+        self.cache_v: Tensor | None = None
 
-    def __call__(self, q, k, v, extra_options):
+    def __call__(self, q: Tensor, k: Tensor, v: Tensor, extra_options):
         dtype = q.dtype
-        _cond_or_uncond: list[int]
-        _cond_or_uncond = extra_options["cond_or_uncond"]
+        cond_or_uncond: list[int]
+        cond_or_uncond = extra_options["cond_or_uncond"]
         # check if we should disable on certain timesteps
         sigma = (
             extra_options["sigmas"].detach().cpu()[0].item()
@@ -44,8 +49,10 @@ class Attn1Replace:
         )
         # this is the pure hydrate pass
         if extra_options.get("hydrate_only", False):
-            self.cache_k = k
-            self.cache_v = v
+            # in case we have multiple images here, let's flatten the batch dimension along the seq dimension
+            bl = k.shape[0] * k.shape[1]
+            self.cache_k = k.reshape(1, bl, -1)
+            self.cache_v = v.reshape(1, bl, -1)
             return optimized_attention(q, k, v, extra_options["n_heads"])
         # mixingweight, basically
         strength = self.args.get("strength", 1.0)
@@ -58,49 +65,63 @@ class Attn1Replace:
             out = optimized_attention(q, k, v, extra_options["n_heads"])
         # okay, actually now there are some extra cases we have to consider
         if should_activate:
-            # we added the reference image on the 0th index, usually
-            q_ref = None
-            k_ref = None
-            v_ref = None
-            # if there's a ref index, that means we're doing the reference right now
-            # and we can get its QKVs
-            if "ref_index" in extra_options:
-                r = extra_options["ref_index"]
-                q_ref = q[r]
-                k_ref = k[r]
-                v_ref = v[r]
-            # regardless of IF there is a ref image, try to overwrite from the cache if it's possible
-            # overwrite KVs with what's in the cache (which is a different shape, but more accurate?)
-            if self.cache_k is not None:
+            n_ref = extra_options.get("n_ref", 0)
+            q_ref = q[:n_ref]
+            if self.cache_k is not None and self.cache_v is not None:
                 k_ref = self.cache_k
                 v_ref = self.cache_v
-            # okay, now we have to figure out the Q, K, V for each element of our batch
-            # and then put them into 1-3 groups depending on their shapes
-            # and then run attention calls, and then torch.cat them back to get out_style
+            elif n_ref:
+                rl = n_ref * k.shape[1]
+                k_ref = k[:n_ref].reshape(1, rl, -1)
+                v_ref = v[:n_ref].reshape(1, rl, -1)
+            else:
+                raise ValueError("No cache or reference image provided!")
 
-            # List of [0, 1], [0], [1], ...
-            # 0 means conditional, 1 means unconditional
-            # substract 1 from the # of real images, if we have a ref image
-            batches = (q.shape[0] - ("ref_index" in extra_options)) // len(
-                _cond_or_uncond
+            batches = (q.shape[0] - n_ref) // len(cond_or_uncond)
+            # we're going to do the cond and uncond attention separately
+            # this is slightly inefficient in some cases (ie, if the cached reference is the same shape as the merged one)
+            # but in most cases, the cond attention has a different sequence length
+            # compute attention for the cond batches
+            out_cond = None
+            if 0 in cond_or_uncond:
+                start = n_ref + cond_or_uncond.index(0)
+                q_cond = q[start : start + batches]
+                if self.args.get("swap_cond", False):
+                    # actually do the KV injection
+                    k_cond = k_ref.expand(batches, -1, -1)
+                    v_cond = v_ref.expand(batches, -1, -1)
+                else:
+                    # leave the kvs alone
+                    k_cond = k[start : start + batches]
+                    v_cond = v[start : start + batches]
+                out_cond = optimized_attention(
+                    q_cond, k_cond, v_cond, extra_options["n_heads"]
+                )
+
+            # we'll treat ref as uncond
+            # since it should have the same seq size as uncond
+            # compute attention for uncond batches
+            out_ref = []
+            out_uncond = None
+            uncond_idx = list(range(n_ref))
+            if 1 in cond_or_uncond:
+                start = n_ref + cond_or_uncond.index(1)
+                uncond_idx = uncond_idx + list(range(start, start + batches))
+            if uncond_idx:
+                if self.args.get("swap_uncond", False):
+                    q = q_ref.expand(len(uncond_idx), -1, -1)
+                else:
+                    q = q[uncond_idx]
+                k = k[uncond_idx]
+                v = v[uncond_idx]
+                out_ref_uncond = optimized_attention(q, k, v, extra_options["n_heads"])
+                out_ref, out_uncond = torch.split(
+                    out_ref_uncond, [n_ref, out_ref_uncond.shape[0] - n_ref]
+                )
+
+            out_style = torch.cat(
+                [out_ref] + [[out_cond, out_uncond][c] for c in cond_or_uncond]
             )
-            # essentially "repeat_interleave" on _cond_or_uncond
-            cond_or_uncond = list(chain(*([i] * batches for i in _cond_or_uncond)))
-            # if we're doing NVQG, then the unconditional images should use q_ref instead
-            if self.args.get("swap_uncond", False):
-                q = torch.stack(
-                    [[q_i, q_ref][c] for q_i, c in zip(q, cond_or_uncond)], dim=0
-                )
-            if self.args.get("swap_cond", False):
-                # swap the keys and values in the conditional generation
-                k = torch.stack(
-                    [[k_ref, k_i][c] for k_i, c in zip(k, cond_or_uncond)], dim=0
-                )
-                v = torch.stack(
-                    [[v_ref, v_i][c] for v_i, c in zip(v, cond_or_uncond)], dim=0
-                )
-            # call attention
-            out_style = optimized_attention(q, k, v, extra_options["n_heads"])
             # mix based on strength
             out = out * (1 - strength) + out_style * strength
         return out.to(dtype=dtype)
