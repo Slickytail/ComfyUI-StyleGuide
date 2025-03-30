@@ -84,7 +84,7 @@ class Attn1Replace:
             # compute attention for the cond batches
             out_cond = None
             if 0 in cond_or_uncond:
-                start = n_ref + cond_or_uncond.index(0)
+                start = n_ref + cond_or_uncond.index(0) * batches
                 q_cond = q[start : start + batches]
                 if self.args.get("swap_cond", False):
                     # actually do the KV injection
@@ -105,7 +105,7 @@ class Attn1Replace:
             out_uncond = None
             uncond_idx = list(range(n_ref))
             if 1 in cond_or_uncond:
-                start = n_ref + cond_or_uncond.index(1)
+                start = n_ref + cond_or_uncond.index(1) * batches
                 uncond_idx = uncond_idx + list(range(start, start + batches))
             if uncond_idx:
                 if self.args.get("swap_uncond", False):
