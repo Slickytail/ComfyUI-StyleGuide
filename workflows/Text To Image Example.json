@@ -144,92 +144,6 @@
       ]
     },
     {
-      "id": 21,
-      "type": "ColorGradeEulerSampler",
-      "pos": [
-        900,
-        280
-      ],
-      "size": [
-        350,
-        102
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 35
-        },
-        {
-          "name": "reference",
-          "type": "LATENT",
-          "link": 110
-        }
-      ],
-      "outputs": [
-        {
-          "name": "SAMPLER",
-          "type": "SAMPLER",
-          "links": [
-            74
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ColorGradeEulerSampler"
-      },
-      "widgets_values": [
-        0.5,
-        1
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
-    {
-      "id": 24,
-      "type": "BasicScheduler",
-      "pos": [
-        900,
-        430
-      ],
-      "size": [
-        350,
-        106
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 38
-        }
-      ],
-      "outputs": [
-        {
-          "name": "SIGMAS",
-          "type": "SIGMAS",
-          "links": [
-            39
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "BasicScheduler"
-      },
-      "widgets_values": [
-        "normal",
-        30,
-        1
-      ]
-    },
-    {
       "id": 5,
       "type": "EmptyLatentImage",
       "pos": [
@@ -613,7 +527,8 @@
       ],
       "properties": {
         "Node name for S&R": "VAEEncode"
-      }
+      },
+      "widgets_values": []
     },
     {
       "id": 16,
@@ -812,6 +727,93 @@
         "Node name for S&R": "VAEEncode"
       },
       "widgets_values": []
+    },
+    {
+      "id": 24,
+      "type": "BasicScheduler",
+      "pos": [
+        900,
+        440
+      ],
+      "size": [
+        350,
+        106
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            39
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      },
+      "widgets_values": [
+        "normal",
+        30,
+        1
+      ]
+    },
+    {
+      "id": 21,
+      "type": "ColorGradeEulerSampler",
+      "pos": [
+        900,
+        280
+      ],
+      "size": [
+        350,
+        126
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 35
+        },
+        {
+          "name": "reference",
+          "type": "LATENT",
+          "link": 110
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            74
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ColorGradeEulerSampler"
+      },
+      "widgets_values": [
+        0.5,
+        1,
+        0.4
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
     }
   ],
   "links": [
@@ -1052,10 +1054,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.6303940863128575,
+      "scale": 0.7627768444385469,
       "offset": [
-        -307.89346539575865,
-        244.73689560162532
+        -346.4723154420942,
+        120.60666802332572
       ]
     }
   },

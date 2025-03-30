@@ -70,7 +70,19 @@ class ColorGradeEulerSampler:
                         "default": 0.8,
                         "min": 0.0,
                         "max": 1.0,
+                        "step": 0.01,
                         "tooltip": "The end time % for the colorgrading.",
+                    },
+                ),
+                "rate": (
+                    "FLOAT",
+                    {
+                        "default": 0.4,
+                        "min": 0.01,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "tooltip": "How much to adjust the colors at each step (compared to full normalization). This can help to reduce artifacts,"
+                        "by giving the model time to correct the errors caused by adjusting the latent. In general, only about 0.4 is needed to to match colors.",
                     },
                 ),
             },
@@ -83,7 +95,12 @@ class ColorGradeEulerSampler:
     DESCRIPTION = "sampler to color grade the latent to match the reference latent"
 
     def create_sampler(
-        self, model, reference, start_percent: float, end_percent: float
+        self,
+        model,
+        reference,
+        start_percent: float,
+        end_percent: float,
+        rate: float,
     ):
         # inside the model, the latent has a different scale/mean than what the VAE processes
         # so in order to get the right mean/variance, we need to rescale the reference latent
@@ -133,7 +150,9 @@ class ColorGradeEulerSampler:
                 d = to_d(x, sigma_hat, denoised)
                 # colorgrade the latent
                 if i_start <= i <= i_end:
-                    denoised = adain_latent(denoised, mean_reference, std_reference)
+                    denoised = adain_latent(
+                        denoised, mean_reference, std_reference, interp=rate
+                    )
 
                 if callback is not None:
                     callback(
