@@ -64,13 +64,9 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     # this increases the strength of the controlnet. otherwise it gets drowned out by the style injection.
     if c.get("control", None) is not None:
         # the batch indices to zero out
-        uncond_indices = torch.tensor(
-            [
-                i
-                for i, t in enumerate(c["transformer_options"]["cond_or_uncond"])
-                if t == 1
-            ]
-        )
+        cond_or_uncond = c["transformer_options"]["cond_or_uncond"]
+        has_uncond = 1 in cond_or_uncond
+        uncond_idx = cond_or_uncond.index(1) if has_uncond else 0
         new = {}
         # the control data is a mapping from [in/middle/out] to lists of tensors: activations to be added inside the model
         old: dict[str, list[torch.Tensor]]
@@ -78,12 +74,10 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
         for k, v in old.items():
             new[k] = []
             for t in v:
-                if cn_zero_uncond:
-                    t[uncond_indices] = 0.0
+                if cn_zero_uncond and has_uncond:
+                    true_bs = t.shape[0] // len(cond_or_uncond)
+                    t[uncond_idx : uncond_idx + true_bs] = 0.0
                 out = torch.cat((torch.zeros_like(t[0]).unsqueeze(0), t), dim=0)
-                # zero out the uncond
-                if cn_zero_uncond:
-                    out[uncond_indices] = 0.0
                 new[k].append(out)
         c["control"] = new
     return c
