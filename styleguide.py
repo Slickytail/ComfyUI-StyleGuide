@@ -226,7 +226,7 @@ class ApplyVisualStyle:
             for index in range(10):
                 patch_model_block(
                     model,
-                    ("middle", 1, index),
+                    ("middle", 0, index),
                     swap_uncond=True,
                     swap_cond=False,
                     **style_kwargs

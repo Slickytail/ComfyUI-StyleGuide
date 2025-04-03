@@ -48,11 +48,12 @@ class Attn1Replace:
             <= self.args.get("sigma_start", 999999999.9)
         )
         # this is the pure hydrate pass
-        if extra_options.get("hydrate_only", False):
+        if extra_options.get("hydrate_only"):
             # in case we have multiple images here, let's flatten the batch dimension along the seq dimension
-            bl = k.shape[0] * k.shape[1]
-            self.cache_k = k.reshape(1, bl, -1)
-            self.cache_v = v.reshape(1, bl, -1)
+            if self.args.get("swap_cond"):
+                bl = k.shape[0] * k.shape[1]
+                self.cache_k = k.reshape(1, bl, -1)
+                self.cache_v = v.reshape(1, bl, -1)
             return optimized_attention(q, k, v, extra_options["n_heads"])
         # mixingweight, basically
         strength = self.args.get("strength", 1.0)
@@ -86,7 +87,7 @@ class Attn1Replace:
             if 0 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(0) * batches
                 q_cond = q[start : start + batches]
-                if self.args.get("swap_cond", False):
+                if self.args.get("swap_cond"):
                     # actually do the KV injection
                     k_cond = k_ref.expand(batches, -1, -1)
                     v_cond = v_ref.expand(batches, -1, -1)
@@ -108,7 +109,7 @@ class Attn1Replace:
                 start = n_ref + cond_or_uncond.index(1) * batches
                 uncond_idx = uncond_idx + list(range(start, start + batches))
             if uncond_idx:
-                if self.args.get("swap_uncond", False):
+                if self.args.get("swap_uncond"):
                     q = q_ref.expand(len(uncond_idx), -1, -1)
                 else:
                     q = q[uncond_idx]
