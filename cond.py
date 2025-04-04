@@ -31,7 +31,7 @@ def create_hydrate_cond(c, cond: list, noise, device, model) -> dict:
     }
 
 
-def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
+def create_merged_cond(c: dict, cond: list, n=1, cn_zero_uncond=True) -> dict:
     """
     `c` is the dict containing the actual cond tensors that will be passed to the model.
     `cond` is the output from the conditioning node.
@@ -46,17 +46,17 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
     c = c.copy()
     c["transformer_options"] = c["transformer_options"].copy()
     # our attention implementation will check for n_ref to find out how many ref images there are
-    c["transformer_options"]["n_ref"] = 1
+    c["transformer_options"]["n_ref"] = n
     # within comfy official code, cond_or_uncond is only used for the SelfAttentionGuidance node
     # combine the actual text encoding tokens
     c["c_crossattn"] = torch.cat(
-        (cond_tokens.to(c["c_crossattn"].device), c["c_crossattn"]),
+        (cond_tokens.to(c["c_crossattn"].device).repeat(n, 1, 1), c["c_crossattn"]),
         dim=0,
     )
     # combine the pooled putput
     y = cond_dict["pooled_output"].to(c["y"].device)
     # hacky, but the last part of the vector is height/width/crop values, which are gonna be the same anyway
-    y = torch.cat((y, c["y"][0:1, 1280:]), dim=1)
+    y = torch.cat((y, c["y"][0:1, 1280:]), dim=1).repeat(n, 1)
     c["y"] = torch.cat((y, c["y"]), dim=0)
     # combine the controlnet stuff
     # we'll zero out the activations on the new component
@@ -77,7 +77,9 @@ def create_merged_cond(c: dict, cond: list, cn_zero_uncond=True) -> dict:
                 if cn_zero_uncond and has_uncond:
                     true_bs = t.shape[0] // len(cond_or_uncond)
                     t[uncond_idx : uncond_idx + true_bs] = 0.0
-                out = torch.cat((torch.zeros_like(t[0]).unsqueeze(0), t), dim=0)
+                new_activations = torch.zeros_like(t[0]).unsqueeze(0)
+                new_activations = torch.cat([new_activations] * n, dim=0)
+                out = torch.cat((new_activations, t), dim=0)
                 new[k].append(out)
         c["control"] = new
     return c

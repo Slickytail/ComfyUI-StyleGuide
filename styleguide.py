@@ -1,9 +1,11 @@
 from typing import Callable
 import comfy
 import torch
+from torch.nn import functional as F
 
 from .attention import patch_model_block
 from .cond import create_merged_cond, create_hydrate_cond
+from functools import lru_cache
 
 
 class ApplyVisualStyle:
@@ -20,12 +22,6 @@ class ApplyVisualStyle:
                         "max": 0xFFFFFFFFFFFFFFFF,
                         "control_after_generate": True,
                         "tooltip": "The random seed used for noising the style latent.",
-                    },
-                ),
-                "reference_latent": (
-                    "LATENT",
-                    {
-                        "tooltip": "The encoded latent (without noise) of the style image, at its original size/shape. It should be the same # MP as the generation image, though."
                     },
                 ),
                 "reference_resized": (
@@ -90,7 +86,16 @@ class ApplyVisualStyle:
                         "tooltip": "The end time % for the stylization.",
                     },
                 ),
-            }
+            },
+            "optional": {
+                "reference_latent": (
+                    "LATENT",
+                    {
+                        "tooltip": "The encoded latent (without noise) of the style image, at its original size/shape. It should be the same # MP as the generation image, though."
+                    },
+                ),
+                "style_mask": ("MASK",),
+            },
         }
 
     CATEGORY = "VisualStylePrompting"
@@ -103,7 +108,6 @@ class ApplyVisualStyle:
         self,
         model: comfy.model_patcher.ModelPatcher,
         seed: int,
-        reference_latent: dict,
         reference_resized: dict,
         reference_cond: list,
         nvqg_enabled: bool,
@@ -112,6 +116,8 @@ class ApplyVisualStyle:
         skip_output_layers: int = 0,
         start_percent: float = 0.0,
         end_percent: float = 1.0,
+        reference_latent: dict | None = None,
+        style_mask: torch.Tensor | None = None,
     ):
 
         model = model.clone()
@@ -123,20 +129,20 @@ class ApplyVisualStyle:
         )
 
         # convert the reference latent into the model-internal format
-        orig_samples = model.get_model_object("latent_format").process_in(
-            reference_latent["samples"]
-        )
         resized_samples = model.get_model_object("latent_format").process_in(
             reference_resized["samples"]
         )
+        if reference_latent is not None:
+            orig_samples = model.get_model_object("latent_format").process_in(
+                reference_latent["samples"]
+            )
+        else:
+            orig_samples = resized_samples
         # if the original reference is the same shape as the generated image
         # then we can just run it through at the same time,
         # and we don't need to do any KV caching
         needs_separate_hydrate = orig_samples.shape != resized_samples.shape
 
-        # todo: support multiple reference images
-        # it's fairly clear how to do it for the conditional pass, but not for the uncond (NVQ) pass
-        assert resized_samples.shape[0] == 1
         assert len(reference_cond) == 1
 
         # patch the model's forward function to noise and add the reference samples
@@ -144,7 +150,7 @@ class ApplyVisualStyle:
             x = p["input"]
             # t is actually the sigma, not the index
             t = p["timestep"]
-            c = p["c"]
+            c = p["c"].copy()
             sigma = t.detach().cpu()[0].item()
             # skip the reference injection at some timesteps
             if not (sigma_end <= sigma <= sigma_start):
@@ -170,13 +176,15 @@ class ApplyVisualStyle:
                     c, reference_cond, visual_orig, x.device, model.model
                 )
                 # run the model and discard the output
+                # we don't need to repeat the timestamp, it's okay with it being shape (1,)
                 apply_model(visual_orig, t[0:1], **c_cache)
 
             # if we have an uncond, or if we're doing the reference in the same batch, add the resized reference to the batch
             if should_merge:
+                n_ref = resized_samples.shape[0]
                 # combine the conds
                 c = create_merged_cond(
-                    c, reference_cond, cn_zero_uncond=controlnet_use_cfg
+                    c, reference_cond, cn_zero_uncond=controlnet_use_cfg, n=n_ref
                 )
                 # noise the reference latent ("stochastic encoding")
                 visual = resized_samples.to(x.device)
@@ -187,12 +195,12 @@ class ApplyVisualStyle:
                 # so we can safely add a new element to the batch and know it won't cause problems
                 x = torch.concat((visual, x), dim=0)
                 # add the timestep
-                t = torch.cat((t[0:1], t), dim=0)
+                t = torch.cat((t[0:1].repeat(n_ref), t), dim=0)
 
             out = apply_model(x, t, **c)
             # remove the useless denoised reference image, if we added it
             if should_merge:
-                out = out[visual.shape[0] :]
+                out = out[n_ref:]
             return out
 
         # the unet wrapper is the innermost wrapper around the model
@@ -203,11 +211,36 @@ class ApplyVisualStyle:
         # and we guarantee that it won't be run in a separate batch from the cond/uncond images.
         model.set_model_unet_function_wrapper(add_reference)
 
+        if style_mask is not None:
+            # inside the model, the attention masks will need to be different sizes, depending on the layer etc.
+            # so we'll pass the attention processors a callback that will generate the mask at the right size
+            # this allows us to cache the masks (interping the mask every single attn call is super slow)
+            # IIRC there are ~4 different sizes used inside the UNet
+            @lru_cache(8)
+            def get_mask(height, width):
+                # the mask is of shape (1, H, W)
+                # but interpolate expects (B, C, H, W)
+                mask = style_mask.unsqueeze(1)
+                # since we're probably downsampling by a factor of >10, area will produce the most accurate results
+                mask = F.interpolate(mask, (height, width), mode="area")
+                mask = mask.squeeze(1)
+                return mask
+
         style_kwargs = dict(
-            sigma_start=sigma_start, sigma_end=sigma_end, strength=strength
+            sigma_start=sigma_start,
+            sigma_end=sigma_end,
+            strength=strength,
+            # figure out the multiple references before we do masking
+            # get_mask=get_mask
         )
+
         # according to the paper, the NVQ is added in the input and middle blocks
         # we add it to input and middle, and also to the out blocks (up to the skip index)
+        # notes on NVQG:
+        # doing it in the input can make the output "too clean"
+        # and in some cases reduce resemblance to the input style
+        # doing it in the middle blocks really does very little
+        # doing it in the out blocks is where the difference is really made I think?
         if nvqg_enabled:
             # patch input blocks
             for id in [4, 5, 7, 8]:  # id of input_blocks that have self attention
