@@ -211,6 +211,7 @@ class ApplyVisualStyle:
         # and we guarantee that it won't be run in a separate batch from the cond/uncond images.
         model.set_model_unet_function_wrapper(add_reference)
 
+        get_mask = None  # type: ignore
         if style_mask is not None:
             # inside the model, the attention masks will need to be different sizes, depending on the layer etc.
             # so we'll pass the attention processors a callback that will generate the mask at the right size
@@ -226,13 +227,12 @@ class ApplyVisualStyle:
                 mask = mask.squeeze(1)
                 return mask
 
-        style_kwargs = dict(
-            sigma_start=sigma_start,
-            sigma_end=sigma_end,
-            strength=strength,
-            # figure out the multiple references before we do masking
-            # get_mask=get_mask
-        )
+        style_kwargs = {
+            "sigma_start": sigma_start,
+            "sigma_end": sigma_end,
+            "strength": strength,
+            "get_mask": get_mask,
+        }
 
         # according to the paper, the NVQ is added in the input and middle blocks
         # we add it to input and middle, and also to the out blocks (up to the skip index)

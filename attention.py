@@ -50,11 +50,9 @@ class Attn1Replace:
         swap_uncond = self.args.get("swap_uncond")
         # this is the pure hydrate pass
         if extra_options.get("hydrate_only"):
-            # in case we have multiple images here, let's flatten the batch dimension along the seq dimension
             if swap_cond:
-                bl = k.shape[0] * k.shape[1]
-                self.cache_k = k.reshape(1, bl, -1)
-                self.cache_v = v.reshape(1, bl, -1)
+                self.cache_k = k.detach().clone()
+                self.cache_v = v.detach().clone()
             return optimized_attention(q, k, v, extra_options["n_heads"])
         # original attention call before we perturb the queries/values
         out = optimized_attention(q, k, v, extra_options["n_heads"])
@@ -64,16 +62,24 @@ class Attn1Replace:
             q_ref = q[:n_ref]
             k_ref = None
             v_ref = None
-
             if self.cache_k is not None and self.cache_v is not None:
                 k_ref = self.cache_k
                 v_ref = self.cache_v
             elif n_ref:
-                rl = n_ref * k.shape[1]
-                k_ref = k[:n_ref].reshape(1, rl, -1)
-                v_ref = v[:n_ref].reshape(1, rl, -1)
+                k_ref = k[:n_ref]
+                v_ref = v[:n_ref]
             elif swap_cond:
                 raise ValueError("No cache or reference image provided!")
+            # check for the mask
+            get_mask = self.args.get("get_mask")
+            if get_mask is not None:
+                # try to get correct activations size
+                activations_shape = extra_options["activations_shape"]
+                mask = get_mask(*activations_shape[-2:])
+                mask = mask.reshape(1, -1, 1).to(q.device)
+                # should the cached mask be saved on the accelerator?
+            else:
+                mask = None
 
             batches = (q.shape[0] - n_ref) // len(cond_or_uncond)
             # do cond and uncond in separate calls
@@ -90,6 +96,12 @@ class Attn1Replace:
                     out_cond = optimized_attention(
                         q_cond, k_cond, v_cond, extra_options["n_heads"]
                     )
+                    # todo: should we actually just pass the mask into the attention call?
+                    if mask is not None:
+                        out_cond = (
+                            out[start : start + batches] * (1 - mask) + out_cond * mask
+                        )
+
                 else:
                     out_cond = out[start : start + batches]
 
@@ -104,7 +116,13 @@ class Attn1Replace:
                     for i in range(n_ref):
                         q = q_ref[i : i + 1].expand(batches, -1, -1)
                         attn = optimized_attention(q, k, v, extra_options["n_heads"])
+                        # once we figure out how the mask should be interpreted for multi-image, use the mask here
                         out_uncond += attn / n_ref
+                    if mask is not None:
+                        out_uncond = (
+                            out[start : start + batches] * (1 - mask)
+                            + out_uncond * mask
+                        )
                 else:
                     out_uncond = out[start : start + batches]
 
