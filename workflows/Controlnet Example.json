@@ -1,6 +1,6 @@
 {
   "last_node_id": 41,
-  "last_link_id": 111,
+  "last_link_id": 114,
   "nodes": [
     {
       "id": 8,
@@ -789,192 +789,6 @@
       ]
     },
     {
-      "id": 41,
-      "type": "VAEEncode",
-      "pos": [
-        610,
-        -210
-      ],
-      "size": [
-        210,
-        46
-      ],
-      "flags": {},
-      "order": 16,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "pixels",
-          "type": "IMAGE",
-          "link": 106
-        },
-        {
-          "name": "vae",
-          "type": "VAE",
-          "link": 107
-        }
-      ],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "links": [
-            108,
-            109
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "VAEEncode"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 11,
-      "type": "VAEEncode",
-      "pos": [
-        610,
-        -120
-      ],
-      "size": [
-        210,
-        46
-      ],
-      "flags": {},
-      "order": 15,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "pixels",
-          "type": "IMAGE",
-          "link": 27
-        },
-        {
-          "name": "vae",
-          "type": "VAE",
-          "link": 13
-        }
-      ],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "links": [
-            110
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "VAEEncode"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 15,
-      "type": "CLIPTextEncode",
-      "pos": [
-        410,
-        150
-      ],
-      "size": [
-        430,
-        120
-      ],
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 19
-        }
-      ],
-      "outputs": [
-        {
-          "name": "CONDITIONING",
-          "type": "CONDITIONING",
-          "links": [
-            111
-          ],
-          "slot_index": 0
-        }
-      ],
-      "title": "Stochastic Encode Prompt",
-      "properties": {
-        "Node name for S&R": "CLIPTextEncode"
-      },
-      "widgets_values": [
-        "3d rendering"
-      ],
-      "color": "#2a363b",
-      "bgcolor": "#3f5159"
-    },
-    {
-      "id": 16,
-      "type": "ApplyVisualStyle",
-      "pos": [
-        900,
-        -40
-      ],
-      "size": [
-        352.79998779296875,
-        286
-      ],
-      "flags": {},
-      "order": 18,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 23
-        },
-        {
-          "name": "reference_latent",
-          "type": "LATENT",
-          "link": 108
-        },
-        {
-          "name": "reference_resized",
-          "type": "LATENT",
-          "link": 110
-        },
-        {
-          "name": "reference_cond",
-          "type": "CONDITIONING",
-          "link": 111
-        }
-      ],
-      "outputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "links": [
-            63
-          ],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ApplyVisualStyle"
-      },
-      "widgets_values": [
-        1,
-        "fixed",
-        true,
-        true,
-        0.8,
-        24,
-        0,
-        1
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
-    {
       "id": 24,
       "type": "BasicScheduler",
       "pos": [
@@ -1026,7 +840,7 @@
         126
       ],
       "flags": {},
-      "order": 19,
+      "order": 18,
       "mode": 0,
       "inputs": [
         {
@@ -1060,6 +874,199 @@
       ],
       "color": "#323",
       "bgcolor": "#535"
+    },
+    {
+      "id": 16,
+      "type": "ApplyVisualStyle",
+      "pos": [
+        900,
+        -70
+      ],
+      "size": [
+        352.79998779296875,
+        306
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 23
+        },
+        {
+          "name": "reference_resized",
+          "type": "LATENT",
+          "link": 113
+        },
+        {
+          "name": "reference_cond",
+          "type": "CONDITIONING",
+          "link": 112
+        },
+        {
+          "name": "reference_latent",
+          "type": "LATENT",
+          "shape": 7,
+          "link": 114
+        },
+        {
+          "name": "style_mask",
+          "type": "MASK",
+          "shape": 7,
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            63
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ApplyVisualStyle"
+      },
+      "widgets_values": [
+        1,
+        "fixed",
+        true,
+        true,
+        0.8,
+        24,
+        0,
+        1
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 15,
+      "type": "CLIPTextEncode",
+      "pos": [
+        410,
+        150
+      ],
+      "size": [
+        430,
+        120
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            112
+          ],
+          "slot_index": 0
+        }
+      ],
+      "title": "Stochastic Encode Prompt",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "3d rendering"
+      ],
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
+    },
+    {
+      "id": 11,
+      "type": "VAEEncode",
+      "pos": [
+        610,
+        -120
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            113
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 41,
+      "type": "VAEEncode",
+      "pos": [
+        610,
+        -210
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 106
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 107
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            109,
+            114
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
     }
   ],
   "links": [
@@ -1328,14 +1335,6 @@
       "VAE"
     ],
     [
-      108,
-      41,
-      0,
-      16,
-      1,
-      "LATENT"
-    ],
-    [
       109,
       41,
       0,
@@ -1344,30 +1343,38 @@
       "LATENT"
     ],
     [
-      110,
-      11,
-      0,
-      16,
-      2,
-      "LATENT"
-    ],
-    [
-      111,
+      112,
       15,
       0,
       16,
-      3,
+      2,
       "CONDITIONING"
+    ],
+    [
+      113,
+      11,
+      0,
+      16,
+      1,
+      "LATENT"
+    ],
+    [
+      114,
+      41,
+      0,
+      16,
+      3,
+      "LATENT"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.4736244074476702,
+      "scale": 0.8882772299321512,
       "offset": [
-        799.6187140008215,
-        512.0500616206248
+        -978.269692239546,
+        290.7190872897454
       ]
     }
   },
