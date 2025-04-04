@@ -46,10 +46,12 @@ class Attn1Replace:
             <= sigma
             <= self.args.get("sigma_start", 999999999.9)
         )
+        swap_cond = self.args.get("swap_cond")
+        swap_uncond = self.args.get("swap_uncond")
         # this is the pure hydrate pass
         if extra_options.get("hydrate_only"):
             # in case we have multiple images here, let's flatten the batch dimension along the seq dimension
-            if self.args.get("swap_cond"):
+            if swap_cond:
                 bl = k.shape[0] * k.shape[1]
                 self.cache_k = k.reshape(1, bl, -1)
                 self.cache_v = v.reshape(1, bl, -1)
@@ -60,6 +62,9 @@ class Attn1Replace:
         if should_activate:
             n_ref = extra_options.get("n_ref", 0)
             q_ref = q[:n_ref]
+            k_ref = None
+            v_ref = None
+
             if self.cache_k is not None and self.cache_v is not None:
                 k_ref = self.cache_k
                 v_ref = self.cache_v
@@ -67,7 +72,7 @@ class Attn1Replace:
                 rl = n_ref * k.shape[1]
                 k_ref = k[:n_ref].reshape(1, rl, -1)
                 v_ref = v[:n_ref].reshape(1, rl, -1)
-            else:
+            elif swap_cond:
                 raise ValueError("No cache or reference image provided!")
 
             batches = (q.shape[0] - n_ref) // len(cond_or_uncond)
@@ -77,7 +82,7 @@ class Attn1Replace:
             out_cond = None
             if 0 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(0) * batches
-                if self.args.get("swap_cond"):
+                if swap_cond:
                     q_cond = q[start : start + batches]
                     # actually do the KV injection
                     k_cond = k_ref.expand(batches, -1, -1)
@@ -92,7 +97,7 @@ class Attn1Replace:
             out_uncond = None
             if 1 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(1) * batches
-                if self.args.get("swap_uncond"):
+                if swap_uncond:
                     k = k[start : start + batches]
                     v = v[start : start + batches]
                     out_uncond = 0
