@@ -89,14 +89,19 @@ class Attn1Replace:
             if 0 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(0) * batches
                 if swap_cond:
+                    assert k_ref is not None
+                    assert v_ref is not None
                     q_cond = q[start : start + batches]
-                    # actually do the KV injection
-                    k_cond = k_ref.expand(batches, -1, -1)
-                    v_cond = v_ref.expand(batches, -1, -1)
-                    out_cond = optimized_attention(
-                        q_cond, k_cond, v_cond, extra_options["n_heads"]
-                    )
-                    # todo: should we actually just pass the mask into the attention call?
+                    out_cond = 0.0
+                    for i in range(n_ref):
+                        # actually do the KV injection
+                        k_cond = k_ref[i : i + 1].expand(batches, -1, -1)
+                        v_cond = v_ref[i : i + 1].expand(batches, -1, -1)
+                        attn = optimized_attention(
+                            q_cond, k_cond, v_cond, extra_options["n_heads"]
+                        )
+                        out_cond += attn / n_ref
+                    # single mask
                     if mask is not None:
                         out_cond = (
                             out[start : start + batches] * (1 - mask) + out_cond * mask
@@ -110,12 +115,14 @@ class Attn1Replace:
             if 1 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(1) * batches
                 if swap_uncond:
-                    k = k[start : start + batches]
-                    v = v[start : start + batches]
+                    k_uc = k[start : start + batches]
+                    v_uc = v[start : start + batches]
                     out_uncond = 0
                     for i in range(n_ref):
-                        q = q_ref[i : i + 1].expand(batches, -1, -1)
-                        attn = optimized_attention(q, k, v, extra_options["n_heads"])
+                        q_uc = q_ref[i : i + 1].expand(batches, -1, -1)
+                        attn = optimized_attention(
+                            q_uc, k_uc, v_uc, extra_options["n_heads"]
+                        )
                         # once we figure out how the mask should be interpreted for multi-image, use the mask here
                         out_uncond += attn / n_ref
                     if mask is not None:
