@@ -94,7 +94,7 @@ class ApplyVisualStyle:
                         "tooltip": "The encoded latent (without noise) of the style image, at its original size/shape. It should be the same # MP as the generation image, though."
                     },
                 ),
-                "style_mask": ("MASK",),
+                "style_mask": ("IMAGE",),
             },
         }
 
@@ -219,12 +219,11 @@ class ApplyVisualStyle:
             # IIRC there are ~4 different sizes used inside the UNet
             @lru_cache(8)
             def get_mask(height, width):
-                # the mask is of shape (1, H, W)
-                # but interpolate expects (B, C, H, W)
-                mask = style_mask.unsqueeze(1)
+                # the original mask (ie, image) is of shape (B, H, W, C)
+                # interpolate wants (B, C, H, W)
+                mask = style_mask.movedim(-1, 1)
                 # since we're probably downsampling by a factor of >10, area will produce the most accurate results
                 mask = F.interpolate(mask, (height, width), mode="area")
-                mask = mask.squeeze(1)
                 return mask
 
         style_kwargs = {
