@@ -1,8 +1,11 @@
 import torch
 from torch import Tensor
+from tqdm.auto import trange
+import numpy as np
+from skimage import color as skcolor
+
 from comfy.samplers import KSAMPLER
 from comfy.k_diffusion.sampling import to_d
-from tqdm.auto import trange
 
 
 def adain_latent(x: Tensor, mean: Tensor, std: Tensor, interp: float = 1.0) -> Tensor:
@@ -17,6 +20,55 @@ def adain_latent(x: Tensor, mean: Tensor, std: Tensor, interp: float = 1.0) -> T
 
     xp = (x - mean_input) / std_input * std + mean
     return xp * interp + x * (1 - interp)
+
+
+class LuminanceCombine:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "color": (
+                    "IMAGE",
+                    {"tooltip": "The image with the hue and chroma values."},
+                ),
+                "luminance": (
+                    "IMAGE",
+                    {"tooltip": "The image with the luminance values."},
+                ),
+                "match_exposure": ("BOOLEAN", {"default": True}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "combine"
+    CATEGORY = "VisualStylePrompting"
+    DESCRIPTION = (
+        "Combine the Hue and Chroma from one image with the Luminance from another"
+    )
+
+    def combine(self, color: Tensor, luminance: Tensor, match_exposure):
+        if color.shape != luminance.shape:
+            raise ValueError("Both images must be the same shape!")
+        # do we need to convert to srgb or something first?
+        # notes on dtypes and ranges:
+        # skcolor.rgb2lab accepts either 0-1 (float) or 0-255 (uint8)
+        # and returns with float values
+        # lab2rgb always returns float values
+        # fortunately, inside comfy the images are between 0 and 1
+        # so there's no need to do anything fancy
+        color_lab = skcolor.rgb2lab(color.cpu().numpy())
+        luminance_lab = skcolor.rgb2lab(luminance.cpu().numpy())[..., 0]
+        if match_exposure:
+            # hmm, is there maybe a better way to do this?
+            # like some sort of nonlinear curve...
+            luminance_lab = (
+                luminance_lab / np.mean(luminance_lab) * np.mean(color_lab[..., 0])
+            )
+        # copy the Luminance component
+        color_lab[..., 0] = luminance_lab
+        output = skcolor.lab2rgb(color_lab)
+        output = torch.Tensor(output).to(dtype=color.dtype, device=color.device)
+        return (output,)
 
 
 class ColorGradeLatent:
@@ -177,9 +229,11 @@ class ColorGradeEulerSampler:
 NODE_CLASS_MAPPINGS = {
     "ColorGradeEulerSampler": ColorGradeEulerSampler,
     "ColorGradeLatent": ColorGradeLatent,
+    "LuminanceCombine": LuminanceCombine,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ColorGradeEulerSampler": "Sampler Euler Colorgrade",
     "ColorGradeLatent": "Colorgrade Latent",
+    "LuminanceCombine": "Combine Luminance and Color",
 }
