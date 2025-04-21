@@ -140,6 +140,7 @@ class Attn1Replace:
                                 # [b, c, q, 1] * [b, c, 1, k] = [b, q, k]
                                 _mask = torch.sum(mask * attn_mask, dim=1)
                                 _mask = _mask.log().to(dtype=q.dtype, device=q.device)
+                                _mask = torch.clamp(_mask, min=-30.0)
                                 # since KV
                                 weight = 1.0 - unstyle_mask
                             # multiple image style mask
