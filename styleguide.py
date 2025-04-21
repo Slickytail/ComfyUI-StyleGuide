@@ -94,7 +94,8 @@ class ApplyVisualStyle:
                         "tooltip": "The encoded latent (without noise) of the style image, at its original size/shape. It should be the same # MP as the generation image, though."
                     },
                 ),
-                "style_mask": ("IMAGE",),
+                "generate_mask": ("IMAGE",),
+                "style_source_mask": ("IMAGE",),
             },
         }
 
@@ -117,7 +118,8 @@ class ApplyVisualStyle:
         start_percent: float = 0.0,
         end_percent: float = 1.0,
         reference_latent: dict | None = None,
-        style_mask: torch.Tensor | None = None,
+        generate_mask: torch.Tensor | None = None,
+        style_source_mask: torch.Tensor | None = None,
     ):
 
         model = model.clone()
@@ -211,18 +213,27 @@ class ApplyVisualStyle:
         # and we guarantee that it won't be run in a separate batch from the cond/uncond images.
         model.set_model_unet_function_wrapper(add_reference)
 
-        get_mask = None  # type: ignore
-        if style_mask is not None:
+        get_generate_mask = None  # type: ignore
+        if generate_mask is not None:
             # inside the model, the attention masks will need to be different sizes, depending on the layer etc.
             # so we'll pass the attention processors a callback that will generate the mask at the right size
             # this allows us to cache the masks (interping the mask every single attn call is super slow)
             # IIRC there are ~4 different sizes used inside the UNet
             @lru_cache(8)
-            def get_mask(height, width):
+            def get_generate_mask(height, width):
                 # the original mask (ie, image) is of shape (B, H, W, C)
                 # interpolate wants (B, C, H, W)
-                mask = style_mask.movedim(-1, 1)
+                mask = generate_mask.movedim(-1, 1)
                 # since we're probably downsampling by a factor of >10, area will produce the most accurate results
+                mask = F.interpolate(mask, (height, width), mode="area")
+                return mask
+
+        get_style_mask = None  # type: ignore
+        if style_source_mask is not None:
+
+            @lru_cache(8)
+            def get_style_mask(height, width):
+                mask = style_source_mask.movedim(-1, 1)
                 mask = F.interpolate(mask, (height, width), mode="area")
                 return mask
 
@@ -230,7 +241,8 @@ class ApplyVisualStyle:
             "sigma_start": sigma_start,
             "sigma_end": sigma_end,
             "strength": strength,
-            "get_mask": get_mask,
+            "get_generate_mask": get_generate_mask,
+            "get_style_mask": get_style_mask,
         }
 
         # according to the paper, the NVQ is added in the input and middle blocks
