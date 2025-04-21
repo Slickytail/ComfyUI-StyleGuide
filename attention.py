@@ -72,6 +72,7 @@ class Attn1Replace:
             q_ref = q[:n_ref]
             k_ref = None
             v_ref = None
+            shape_ref = None
             activations_shape = extra_options["activations_shape"]
             if self.cache is not None:
                 k_ref = self.cache.k
@@ -86,15 +87,6 @@ class Attn1Replace:
                 raise ValueError("No cache or reference image provided!")
             # check for the mask
             get_mask = self.args.get("get_mask")
-            if get_mask is not None:
-                # try to get correct activations size
-                mask = get_mask(*activations_shape[-2:])
-                _b, _c, _, _ = mask.shape
-                mask = mask.reshape(_b, _c, -1, 1).to(q.device)
-                unstyle_mask = 1.0 - mask[:, :n_ref].sum(dim=1)
-            else:
-                mask = None
-                unstyle_mask = None
 
             batches = (q.shape[0] - n_ref) // len(cond_or_uncond)
             # do cond and uncond in separate calls
@@ -106,6 +98,21 @@ class Attn1Replace:
                 if swap_cond:
                     assert k_ref is not None
                     assert v_ref is not None
+                    # for trying the local masking, this is a little test
+                    assert get_mask is None
+                    assert n_ref == 1
+                    assert shape_ref is not None
+                    # create the spatial mask
+                    # this is basically like inverse ROPE
+                    mask = inverse_pe_mask(
+                        activations_shape[-2:],
+                        shape_ref[-2:],
+                        device=q.device,
+                        sigma=self.args.get("unmask_sigma", 1),
+                        scale=self.args.get("unmask_scale", 1),
+                    ).to(dtype=q.dtype)
+                    mask = mask.unsqueeze(0).unsqueeze(1)
+                    # mask shape is (1, 1, nq, nk)
                     q_cond = q[start : start + batches]
                     out_cond = 0.0
                     # todo: as an optimization, should we check the mask and only pass in the KVs that have nonzero weight
@@ -114,14 +121,9 @@ class Attn1Replace:
                         k_cond = k_ref[i : i + 1].expand(batches, -1, -1)
                         v_cond = v_ref[i : i + 1].expand(batches, -1, -1)
                         attn = optimized_attention(
-                            q_cond, k_cond, v_cond, extra_options["n_heads"]
+                            q_cond, k_cond, v_cond, extra_options["n_heads"], mask=mask
                         )
-                        weight = mask[:, i] if mask is not None else 1 / n_ref
-                        out_cond += attn * weight
-                    # single mask
-                    if unstyle_mask is not None:
-                        out_cond += out[start : start + batches] * unstyle_mask
-
+                        out_cond += attn
                 else:
                     out_cond = out[start : start + batches]
 
@@ -130,18 +132,23 @@ class Attn1Replace:
             if 1 in cond_or_uncond:
                 start = n_ref + cond_or_uncond.index(1) * batches
                 if swap_uncond:
+                    mask = inverse_pe_mask(
+                        activations_shape[-2:],
+                        activations_shape[-2:],
+                        device=q.device,
+                        sigma=self.args.get("unmask_sigma", 1),
+                        scale=self.args.get("unmask_scale", 1),
+                    ).to(dtype=q.dtype)
+                    mask = mask.unsqueeze(0).unsqueeze(1)
                     k_uc = k[start : start + batches]
                     v_uc = v[start : start + batches]
                     out_uncond = 0
                     for i in range(n_ref):
                         q_uc = q_ref[i : i + 1].expand(batches, -1, -1)
                         attn = optimized_attention(
-                            q_uc, k_uc, v_uc, extra_options["n_heads"]
+                            q_uc, k_uc, v_uc, extra_options["n_heads"], mask=mask
                         )
-                        weight = mask[:, i] if mask is not None else 1 / n_ref
-                        out_uncond += attn * weight
-                    if unstyle_mask is not None:
-                        out_uncond += out[start : start + batches] * unstyle_mask
+                        out_uncond += attn
                 else:
                     out_uncond = out[start : start + batches]
 
@@ -151,3 +158,29 @@ class Attn1Replace:
             strength = self.args.get("strength", 1.0)
             out[n_ref:] = out[n_ref:] * (1 - strength) + out_style * strength
         return out.to(dtype=dtype)
+
+
+def inverse_pe_mask(q_shape, k_shape, device, sigma=1, scale=1):
+    # okay, wait, the aspect ratio should probably be taken into account
+    # anyway, for this first version, we don't care
+    d = device
+    dt = torch.float16
+    pq = torch.zeros((*q_shape, 2), device=d, dtype=dt)
+    pq[..., 0] = torch.linspace(0, 1, q_shape[0], device=d, dtype=dt).unsqueeze(1)
+    pq[..., 1] = torch.linspace(0, 1, q_shape[1], device=d, dtype=dt).unsqueeze(0)
+    pq = pq.reshape(-1, 2)
+
+    pk = torch.zeros((*k_shape, 2), device=d, dtype=dt)
+    pk[..., 0] = torch.linspace(0, 1, k_shape[0], device=d, dtype=dt).unsqueeze(1)
+    pk[..., 1] = torch.linspace(0, 1, k_shape[1], device=d, dtype=dt).unsqueeze(0)
+    pk = pk.reshape(-1, 2)
+
+    # squared distance
+    dist = torch.sum((pq.unsqueeze(1) - pk.unsqueeze(0)) ** 2, dim=-1)
+    # similarity between two tokens
+    inner_product = torch.exp(-dist / sigma**2)  # gaussian
+    # inner_product = -torch.sqrt(dist)              # linear
+    # inner_product = (dist < sigma**2).to(dtype=dt) # hard
+    # the delta-logp should be reduced locally
+    # hence the minus
+    return -inner_product * scale

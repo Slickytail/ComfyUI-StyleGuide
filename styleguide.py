@@ -86,6 +86,24 @@ class ApplyVisualStyle:
                         "tooltip": "The end time % for the stylization.",
                     },
                 ),
+                "unmask_scale": (
+                    "FLOAT",
+                    {
+                        "default": 2.0,
+                        "min": -10.0,
+                        "max": 10.0,
+                        "step": 0.01,
+                    },
+                ),
+                "unmask_sigma": (
+                    "FLOAT",
+                    {
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 5.0,
+                        "step": 0.01,
+                    },
+                ),
             },
             "optional": {
                 "reference_latent": (
@@ -118,6 +136,8 @@ class ApplyVisualStyle:
         end_percent: float = 1.0,
         reference_latent: dict | None = None,
         style_mask: torch.Tensor | None = None,
+        unmask_scale: float = 1.0,
+        unmask_sigma: float = 1.0,
     ):
 
         model = model.clone()
@@ -231,6 +251,8 @@ class ApplyVisualStyle:
             "sigma_end": sigma_end,
             "strength": strength,
             "get_mask": get_mask,
+            "unmask_scale": unmask_scale,
+            "unmask_sigma": unmask_sigma,
         }
 
         # according to the paper, the NVQ is added in the input and middle blocks
