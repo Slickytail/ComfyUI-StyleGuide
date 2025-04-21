@@ -1,6 +1,14 @@
+from dataclasses import dataclass
 import torch
 from torch import Tensor
 from comfy.ldm.modules.attention import optimized_attention
+
+
+@dataclass
+class KVCache:
+    k: Tensor
+    v: Tensor
+    shape: list[int]
 
 
 # this code adapted from cubiq's ipadapter implementation
@@ -28,8 +36,7 @@ class Attn1Replace:
 
     def __init__(self, **kwargs):
         self.args = kwargs
-        self.cache_k: Tensor | None = None
-        self.cache_v: Tensor | None = None
+        self.cache: KVCache | None = None
 
     def __call__(self, q: Tensor, k: Tensor, v: Tensor, extra_options):
         dtype = q.dtype
@@ -51,8 +58,11 @@ class Attn1Replace:
         # this is the pure hydrate pass
         if extra_options.get("hydrate_only"):
             if swap_cond:
-                self.cache_k = k.detach().clone()
-                self.cache_v = v.detach().clone()
+                self.cache = KVCache(
+                    k.detach().clone(),
+                    v.detach().clone(),
+                    shape=extra_options["activations_shape"],
+                )
             return optimized_attention(q, k, v, extra_options["n_heads"])
         # original attention call before we perturb the queries/values
         out = optimized_attention(q, k, v, extra_options["n_heads"])
@@ -62,19 +72,22 @@ class Attn1Replace:
             q_ref = q[:n_ref]
             k_ref = None
             v_ref = None
-            if self.cache_k is not None and self.cache_v is not None:
-                k_ref = self.cache_k
-                v_ref = self.cache_v
+            activations_shape = extra_options["activations_shape"]
+            if self.cache is not None:
+                k_ref = self.cache.k
+                v_ref = self.cache.v
+                shape_ref = self.cache.shape
             elif n_ref:
                 k_ref = k[:n_ref]
                 v_ref = v[:n_ref]
+                # shape_ref is the same, but with a different batch size
+                shape_ref = [n_ref, *activations_shape[1:]]
             elif swap_cond:
                 raise ValueError("No cache or reference image provided!")
             # check for the mask
             get_mask = self.args.get("get_mask")
             if get_mask is not None:
                 # try to get correct activations size
-                activations_shape = extra_options["activations_shape"]
                 mask = get_mask(*activations_shape[-2:])
                 _b, _c, _, _ = mask.shape
                 mask = mask.reshape(_b, _c, -1, 1).to(q.device)
