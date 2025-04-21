@@ -59,11 +59,18 @@ class LuminanceCombine:
         color_lab = skcolor.rgb2lab(color.cpu().numpy())
         luminance_lab = skcolor.rgb2lab(luminance.cpu().numpy())[..., 0]
         if match_exposure:
-            # hmm, is there maybe a better way to do this?
-            # like some sort of nonlinear curve...
-            luminance_lab = (
-                luminance_lab / np.mean(luminance_lab) * np.mean(color_lab[..., 0])
-            )
+            # remap to [0, 1]
+            target = np.mean(color_lab[..., 0]) / 100.0
+            luminance_lab = luminance_lab / 100.0
+            # iterative gamma adjustment
+            for _ in range(5):
+                cur = np.mean(luminance_lab)
+                r = cur / target
+                # fairly arbitrary step coefficient
+                # makes sure we don't overshoot
+                step = r**0.5
+                luminance_lab = luminance_lab**step
+            luminance_lab = luminance_lab * 100.0
         # copy the Luminance component
         color_lab[..., 0] = luminance_lab
         output = skcolor.lab2rgb(color_lab)
