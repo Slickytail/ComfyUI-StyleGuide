@@ -72,21 +72,18 @@ class Attn1Replace:
             q_ref = q[:n_ref]
             k_ref = None
             v_ref = None
-            activations_shape = extra_options["activations_shape"]
             if self.cache is not None:
                 k_ref = self.cache.k
                 v_ref = self.cache.v
-                shape_ref = self.cache.shape
             elif n_ref:
                 k_ref = k[:n_ref]
                 v_ref = v[:n_ref]
-                # shape_ref is the same, but with a different batch size
-                shape_ref = [n_ref, *activations_shape[1:]]
             elif swap_cond:
                 raise ValueError("No cache or reference image provided!")
             # check for the mask
             get_mask = self.args.get("get_mask")
             if get_mask is not None:
+                activations_shape = extra_options["activations_shape"]
                 # try to get correct activations size
                 mask = get_mask(*activations_shape[-2:])
                 _b, _c, _, _ = mask.shape
@@ -109,19 +106,20 @@ class Attn1Replace:
                     q_cond = q[start : start + batches]
                     out_cond = 0.0
                     # todo: as an optimization, should we check the mask and only pass in the KVs that have nonzero weight
-                    for i in range(n_ref):
+                    # when using cached references, n_ref might be different from the number of kv references we have
+                    n_kv = k_ref.shape[0]
+                    for i in range(n_kv):
                         # actually do the KV injection
                         k_cond = k_ref[i : i + 1].expand(batches, -1, -1)
                         v_cond = v_ref[i : i + 1].expand(batches, -1, -1)
                         attn = optimized_attention(
                             q_cond, k_cond, v_cond, extra_options["n_heads"]
                         )
-                        weight = mask[:, i] if mask is not None else 1 / n_ref
+                        weight = mask[:, i] if mask is not None else 1 / n_kv
                         out_cond += attn * weight
                     # single mask
                     if unstyle_mask is not None:
                         out_cond += out[start : start + batches] * unstyle_mask
-
                 else:
                     out_cond = out[start : start + batches]
 
@@ -132,13 +130,14 @@ class Attn1Replace:
                 if swap_uncond:
                     k_uc = k[start : start + batches]
                     v_uc = v[start : start + batches]
-                    out_uncond = 0
-                    for i in range(n_ref):
+                    out_uncond = 0.0
+                    n_q = q_ref.shape[0]
+                    for i in range(n_q):
                         q_uc = q_ref[i : i + 1].expand(batches, -1, -1)
                         attn = optimized_attention(
                             q_uc, k_uc, v_uc, extra_options["n_heads"]
                         )
-                        weight = mask[:, i] if mask is not None else 1 / n_ref
+                        weight = mask[:, i] if mask is not None else 1 / n_q
                         out_uncond += attn * weight
                     if unstyle_mask is not None:
                         out_uncond += out[start : start + batches] * unstyle_mask
