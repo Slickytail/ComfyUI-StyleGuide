@@ -174,6 +174,7 @@ class ApplyVisualStyle:
                 visual_orig = orig_samples.to(x.device)
                 noise_orig = comfy.sample.prepare_noise(visual_orig, seed)
                 visual_orig = visual_orig + noise_orig.to(x.device) * sigma
+                # todo: do we add the zero condition before or after adding the noise?
                 c_cache = create_hydrate_cond(
                     c, reference_cond, visual_orig, x.device, model.model
                 )

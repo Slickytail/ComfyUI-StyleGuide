@@ -9,7 +9,7 @@ def create_hydrate_cond(c, cond: list, noise, device, model) -> dict:
     height = noise.shape[2] * 8
     bs = noise.shape[0]
 
-    return {
+    output = {
         "c_crossattn": cond_tokens.to(device).expand(bs, -1, -1),
         "y": model.encode_adm(
             pooled_output=cond_dict["pooled_output"],
@@ -29,6 +29,9 @@ def create_hydrate_cond(c, cond: list, noise, device, model) -> dict:
             "cond_or_uncond": [0],
         },
     }
+    if "c_concat" in c:
+        output["c_concat"] = torch.zeros_like(noise)
+    return output
 
 
 def create_merged_cond(c: dict, cond: list, n=1, cn_zero_uncond=True) -> dict:
@@ -82,4 +85,12 @@ def create_merged_cond(c: dict, cond: list, n=1, cn_zero_uncond=True) -> dict:
                 out = torch.cat((new_activations, t), dim=0)
                 new[k].append(out)
         c["control"] = new
+
+    # this is for handling CosXL
+    if c.get("c_concat", None) is not None:
+        concat = c["c_concat"]
+        extra_concat = torch.zeros(
+            (n, *concat.shape[1:]), dtype=concat.dtype, device=concat.device
+        )
+        c["c_concat"] = torch.cat((extra_concat, concat), dim=0)
     return c
